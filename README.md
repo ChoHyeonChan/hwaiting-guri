@@ -1,36 +1,229 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 구매 자료 검토함 (ComfoziAI 구매 증빙 인박스)
 
-## Getting Started
+2026 스타트업 영그라운드 MVP 개발 해커톤 · 컴포지 아이템 · **팀 화이팅구리(1인팀)**
 
-First, run the development server:
+흩어진 구매 증빙을 항목별로 구조화하고, 사람이 확인해야 할 문제를 근거와 함께 표시한 뒤,
+사람이 승인한 항목만 ComfoziAI가 받을 수 있는 JSON·CSV로 내보내는 검수 도구다.
+
+> **컴퓨터가 스스로 합치거나 확인 완료로 처리하지 않는다.** 판단은 사람이 한다.
+
+---
+
+## 실행 방법
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+자체 테스트(20건 판정 대조):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npx tsx scripts/verify-20.ts
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+입력 파일은 저장소 상위 폴더의 `42_해커톤_업로드용_증빙20건_2026-08-04.csv`를 읽는다.
+UTF-8 BOM이 붙어 있어 `utf-8-sig` 기준으로 처리한다. BOM을 제거하지 않으면 첫 컬럼명이
+`﻿문서ID`가 되어 컬럼 조회가 전부 실패한다.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 처리 흐름
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+CSV/수기 입력 → 9개 필드 구조화 → 정규화 품목명 후보 → 예외 4종 탐지
+   → 상태 결정 → 사람 검수(수정·승인·반려) → 승인분만 JSON·CSV 내보내기
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 관찰값과 수정값을 분리한다
 
-## Deploy on Vercel
+파싱 결과(`observed`)는 절대 변경하지 않고, 사람이 고치는 값은 `current`에 따로 둔다.
+덕분에 어느 값이 원본이고 어느 값이 사람이 고친 값인지 항상 구분되며,
+변경 이력(`change_log`)은 두 값의 차이로 남는다.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| 파일 | 역할 |
+|---|---|
+| `src/lib/types.ts` | 도메인 타입, 필수 컬럼·표준 단위·중복 키 상수 |
+| `src/lib/dictionary.ts` | 품목명 매핑 사전, 약어·수량꼬리 규칙 |
+| `src/lib/normalize.ts` | 정규화 후보 생성 (사전 → 규칙 → 데이터 부족) |
+| `src/lib/detect.ts` | 예외 4종 탐지, 중복 그룹 판정 |
+| `src/lib/parseCsv.ts` | BOM 제거, RFC 4180 파서, 필수 컬럼 검증 |
+| `src/lib/pipeline.ts` | 전체 파이프라인, 상태 결정, 승인 가능 판정 |
+| `scripts/verify-20.ts` | 20건 자체 테스트 |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## 판정 규칙
+
+| 예외 | 판정 조건 | 상태 |
+|---|---|---|
+| `missing_required` | 필수 9개 필드 중 하나라도 공란·공백 | `needs_review` |
+| `spec_mismatch` | 규격이 `^\s*기존\s*(.+?)\s*/\s*변경\s*(.+?)\s*$` 에 매칭 | `on_hold` |
+| `unit_mismatch` | 단위가 표준 집합(`PK`·`BOX`·`EA`·`PO`) 밖이거나 `/`·`,`로 복수 병기 | `on_hold` |
+| `duplicate_suspected` | 7필드 키 완전 일치, 문서ID 오름차순 그룹의 2번째 이후 | `on_hold` |
+
+상태 결정은 다음 순서다.
+
+```
+missing_required 있음                      → needs_review
+없고 spec/unit/duplicate 중 하나라도 있음   → on_hold
+아무 플래그 없음                            → new (승인 가능)
+```
+
+- 필수값이 비어 있으면 **채우기 전까지 승인 버튼이 비활성**이다.
+- 사람이 "중복 아님"으로 되돌리면 중복 플래그를 상태 계산에서 제외해 정상 흐름으로 복귀시킨다.
+- **규격 판정과 단위 판정은 서로 배제하지 않는 독립 검사다.** 규격이 `기존 … / 변경 …`
+  패턴이어도 단위가 표준이면 `unit_mismatch`는 붙지 않는다(DOC-019가 여기 해당).
+- 자동 병합·자동 삭제·자동 승인·자동 환산은 하지 않는다.
+
+### DOC-020 판단 근거
+
+DOC-020은 규격(`기존 1kg / 변경 4단`)과 단위(`KG/단`)가 각각 독립 규칙에 해당하여
+`exception_flags`에 `spec_mismatch`·`unit_mismatch` 두 개를 모두 담았다.
+창업팀 회신(2026-08-06)으로 확인했으며, 규칙 명세 §6-2 표는 대표 유형 하나만 기재된 것이었다.
+`review_status`는 `on_hold`.
+
+---
+
+## 정규화 품목명 — 사전을 사용했다
+
+**품목명 매핑 사전(19종)을 품목 마스터로 사용한다.** 창업팀이 제공한 20건 기준 사전이며,
+`src/lib/dictionary.ts`에 JSON 형태로 두고 조회한다.
+
+조회는 3단이다.
+
+1. **사전 조회** — 원문 품목명으로 찾는다
+2. **규칙 기반** — 사전에 없으면 약어 전개(`냉감튀`→`냉동 감자튀김`, `S/O`→`소스`, `BBQ`→`바비큐`),
+   수량·규격 꼬리 제거, 공백 정리를 적용한다
+3. **데이터 부족** — 후보를 만들지 못하면 빈칸이 아니라 `데이터 부족`으로 표시한다
+
+사전은 **품목명으로 조회**하므로, 금지 대상인 "문서ID별 예외 결과 하드코딩"과는 다르다.
+문서ID를 바꿔도 판정이 동일함을 자체 테스트로 확인한다(아래 참조).
+
+자동 정규화의 정확도는 평가 대상이 아니라는 안내에 따라, 후보를 표시하고
+사람이 고칠 수 있게 하는 데까지만 구현했다.
+
+---
+
+## 출력 스키마
+
+승인된 항목만 내보낸다. 승인 전·보류·반려는 제외된다.
+
+```json
+{
+  "doc_id": "DOC-001",
+  "source_type": "PDF",
+  "supplier_name": "가온푸드(예시)",
+  "raw_item_name": "토마토살사S/O",
+  "normalized_item_name": "토마토 살사 소스",
+  "spec": "4kg/PK",
+  "unit": "PK",
+  "price_before": 32000,
+  "price_after": 33600,
+  "effective_date": "2026-08-01",
+  "review_status": "approved",
+  "exception_flags": [],
+  "source_ref": {
+    "input_method": "file",
+    "file_name": "42_해커톤_업로드용_증빙20건_2026-08-04.csv",
+    "row_no": 2
+  },
+  "reviewed_at": "2026-08-10T14:03:00+09:00",
+  "review_memo": "",
+  "change_log": [
+    { "at": "2026-08-10T14:01:00+09:00", "field": "normalized_item_name",
+      "from": "토마토살사소스", "to": "토마토 살사 소스", "action": "edit" }
+  ]
+}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `doc_id` | 원본 증빙 식별자 |
+| `source_type` | 증빙이 원래 들어온 형태(`PDF`·`XLSX`·`IMAGE`·`수기`). 표시용 값이다 |
+| `raw_item_name` / `normalized_item_name` | 공급사 표기 원문 / 정규화 후보 또는 사람이 고친 값 |
+| `price_before` / `price_after` | 인상 전·후 단가. 동결·인하도 있다 |
+| `review_status` | `new`·`needs_review`·`on_hold`·`approved`·`rejected` |
+| `exception_flags` | `missing_required`·`spec_mismatch`·`unit_mismatch`·`duplicate_suspected` 순서로 담는다 |
+| `source_ref.row_no` | 헤더를 1행으로 세는 1-indexed 행 번호 |
+| `change_log` | 사람이 값을 고친 내역. 시각·필드·이전값·수정값·동작 |
+
+CSV는 위 구조를 평탄화한다(`source_ref.file_name` → `source_file_name`). 인코딩은 UTF-8.
+
+---
+
+## 자체 테스트
+
+```bash
+npx tsx scripts/verify-20.ts
+```
+
+세 가지를 확인한다.
+
+1. **20건 판정이 창업팀 기대 결과와 일치하는가** (정정 공지 §4 표 기준)
+2. **대기 사유 문구가 플래그마다 비어 있지 않은가** — 사유가 비면 화면에 표시할 게 없다는 뜻이라 실패로 본다
+3. **하드코딩 없이 판정하는가**
+   - (a) 문서ID를 전부 바꾸고 행 순서를 뒤집어도 20건 판정이 동일한지
+   - (b) 문서ID 대소 순서를 반대로 매기면 중복 그룹의 기준 항목이 따라 바뀌는지
+
+최근 실행 결과는 `docs/검증결과_20건_2026-08-05.pdf`에 있다.
+
+---
+
+## 지원 범위
+
+**지원한다**
+
+- CSV 입력(UTF-8, BOM 유무 무관), RFC 4180 따옴표·이스케이프 처리
+- 9개 필드 구조화와 원본 파일명·행 번호 연결
+- 정규화 품목명 후보 생성(사전 → 규칙 → 데이터 부족)
+- 예외 4종 탐지와 사유·근거 원본 값 제공
+- 상태 5종 결정, 중복 되돌리기, 승인 차단 조건
+
+**지원하지 않는다**
+
+- **XLSX 입력** — 요건이 "XLSX 또는 CSV 중 1개"라 CSV를 택했다. 필수 7개 완료 후 여유가 있으면 추가할 예정이다
+- **OCR(PDF·이미지·EML)** — 추가(선택) 요건이며 "필수 7개 완료 후에만"이라는 원칙에 따라 착수하지 않았다
+- **제공 20건을 벗어난 일반화** — 규격·단위 포맷이 20건 범위를 넘으면 파싱하지 않고 `확인 필요`로 떨어뜨린다
+- 가격 판정·비교 리포트·협상·RFQ, 회원/권한, 기존 ComfoziAI Production·DB·API 연결
+
+---
+
+## 알려진 제약과 실패한 시도
+
+- **정규화 규칙 기반 경로는 20건에서 실제로 쓰이지 않는다.** 제공된 20건이 사전 19종으로 전부
+  커버되기 때문이다(자체 테스트 출력 `{ dictionary: 20 }`). 규칙 경로는 구현·동작하지만
+  20건 범위에서는 검증되지 않은 코드다.
+- **DOC-020의 안내 문구(`1단 = 몇 kg인지 공급사 확인이 필요합니다`)는 규격의 `기존`/`변경` 값에서
+  단위 토큰을 잘라 만든다.** 숫자를 뗀 나머지를 단위로 보는 단순한 방식이라, 단위 표기가 20건과
+  많이 다르면 문구가 어색해질 수 있다. 이 경우 일반 문구로 대체된다.
+- **자체 테스트 초안이 틀렸던 사례** — 하드코딩 검증에서 문서ID를 역순으로 매겼더니 중복 그룹의
+  기준 항목이 바뀌어 FAIL이 났다. 확인해보니 "문서ID 오름차순 첫 건이 기준"이라는 명세대로 동작한
+  것이었고, 구현이 아니라 테스트의 가정이 틀린 것이었다. 테스트를 (a) 순서 유지 (b) 순서 반전
+  두 갈래로 나눠 각각 다른 것을 검증하도록 고쳤다.
+- **파일 읽기에 실패해도 이미 검수 중이던 목록은 지우지 않는다.** 처음 구현은 실패 시 상태를
+  통째로 비웠는데, 담당자가 잘못된 파일 하나를 고른 순간 진행하던 검수가 날아가는 동작이라
+  오류 배너만 띄우고 목록은 유지하도록 고쳤다. 재검증 과정에서 발견한 결함이다.
+- 상태는 브라우저 세션에 두고 localStorage로 백업한다. 요건상 영구 감사 로그·회원 권한이
+  불필요하고, 심사 시 여러 명이 각자 접속해도 서로 간섭하지 않게 하려는 선택이다.
+
+---
+
+## 진행 중
+
+아래는 아직 구현되지 않았다.
+
+- 화면 전체(업로드·검수 인박스 목록·항목 상세·승인 흐름·변경 이력 조회)
+- 수기 등록 폼
+- JSON·CSV 내보내기 구현
+- 배포
+
+현재 완료된 것은 입력 파싱, 정규화, 예외 탐지, 상태 결정, 자체 테스트까지다.
+
+---
+
+## 사용하지 않은 것
+
+- 유료 AI 서비스를 사용하지 않는다. 판정은 전부 규칙 기반이다.
+- 실고객 자료·전직장 자료·비밀값을 사용하지 않는다. 입력은 창업팀이 제공한 합성 20건뿐이다.
+- 기존 ComfoziAI Production·DB·인증정보에 접근하지 않는다.

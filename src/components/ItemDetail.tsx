@@ -1,0 +1,207 @@
+'use client';
+
+import { effectiveFlags, canApprove } from '@/lib/pipeline';
+import {
+  FIELD_LABEL, FLAG_LABEL, FLAG_STYLE, NORMALIZATION_SOURCE_LABEL,
+  STATUS_LABEL, STATUS_STYLE, flagEvidence,
+} from '@/lib/labels';
+import { INSUFFICIENT_LABEL } from '@/lib/normalize';
+import type { Item, ItemFields } from '@/lib/types';
+
+const OBSERVED_FIELDS: (keyof ItemFields)[] = [
+  'source_type', 'supplier_name', 'raw_item_name', 'spec', 'unit',
+  'price_before', 'price_after', 'effective_date',
+];
+
+interface Props {
+  item: Item | null;
+  onSelect: (docId: string) => void;
+}
+
+export function ItemDetail({ item, onSelect }: Props) {
+  if (!item) {
+    return (
+      <section className="rounded-lg border border-slate-200 bg-white px-4 py-14 text-center text-sm text-slate-500">
+        목록에서 항목을 선택하면 원본 근거와 대기 이유가 표시됩니다.
+      </section>
+    );
+  }
+
+  const flags = effectiveFlags(item);
+  const approvable = canApprove(item);
+
+  return (
+    <section className="space-y-3">
+      {/* 머리말: 상태와 원본 근거 */}
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-sm font-semibold text-slate-900">{item.doc_id}</span>
+          <span className={`rounded border px-1.5 py-0.5 text-[11px] ${STATUS_STYLE[item.review_status]}`}>
+            {STATUS_LABEL[item.review_status]}
+          </span>
+          {!approvable && (
+            <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-900">
+              필수값을 채우기 전까지 승인할 수 없습니다
+            </span>
+          )}
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          출처{' '}
+          {item.source_ref.input_method === 'file' ? (
+            <>
+              <span className="font-mono">{item.source_ref.file_name}</span>
+              {' · '}
+              <b>{item.source_ref.row_no}행</b>
+              <span className="text-slate-400"> (헤더 포함)</span>
+            </>
+          ) : (
+            '화면에서 직접 입력'
+          )}
+        </p>
+      </div>
+
+      {/* 대기 이유: 사유마다 별도 항목 + 근거가 된 원본 값 */}
+      {flags.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <h3 className="text-sm font-semibold text-slate-800">
+            확인이 필요한 이유 <span className="text-slate-400">({flags.length}건)</span>
+          </h3>
+          <ul className="mt-2 space-y-2">
+            {flags.map((flag) => {
+              const evidence = flagEvidence(item, flag);
+              return (
+                <li key={flag} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded border px-1.5 py-0.5 text-[11px] ${FLAG_STYLE[flag]}`}>
+                      {FLAG_LABEL[flag]}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {evidence.label}{' '}
+                      <span className="font-mono text-slate-700">
+                        {evidence.value || INSUFFICIENT_LABEL}
+                      </span>
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-sm text-slate-700">{item.exception_reasons[flag]}</p>
+
+                  {/* 규격 변경은 기존값과 변경값을 나란히 보여준다 */}
+                  {flag === 'spec_mismatch' && item.spec_change && (
+                    <div className="mt-2 flex items-center gap-3 text-sm">
+                      <Box label="기존" value={item.spec_change.old} />
+                      <span className="text-slate-400">→</span>
+                      <Box label="변경" value={item.spec_change.new} tone="amber" />
+                    </div>
+                  )}
+
+                  {/* 중복은 기준 항목으로 이동할 수 있게 한다 */}
+                  {flag === 'duplicate_suspected' && item.duplicate_of && (
+                    <button
+                      type="button"
+                      onClick={() => onSelect(item.duplicate_of!)}
+                      className="mt-2 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                    >
+                      기준 항목 {item.duplicate_of} 보기 →
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* 중복 그룹의 기준 항목 쪽 안내 */}
+      {item.duplicate_members.length > 0 && (
+        <div className="rounded-lg border border-pink-200 bg-pink-50 p-3">
+          <p className="text-sm text-pink-900">
+            이 항목과 같은 내용으로 의심되는 건이 {item.duplicate_members.length}건 있습니다.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {item.duplicate_members.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onSelect(id)}
+                className="rounded-md border border-pink-300 bg-white px-2.5 py-1 text-xs text-pink-900 hover:bg-pink-100"
+              >
+                {id} 보기 →
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 관찰값과 수정값을 분리해서 나란히 */}
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <h3 className="text-sm font-semibold text-slate-800">항목 값</h3>
+        <p className="mt-0.5 text-xs text-slate-500">
+          관찰값은 파일에서 읽은 원본이며 바뀌지 않습니다. 수정값은 사람이 고칠 수 있는 현재 값입니다.
+        </p>
+        <table className="mt-2 w-full text-left text-sm">
+          <thead className="border-b border-slate-200 text-xs text-slate-500">
+            <tr>
+              <th className="w-32 py-1.5 font-medium">필드</th>
+              <th className="py-1.5 font-medium">관찰값 (원본)</th>
+              <th className="py-1.5 font-medium">수정값 (현재)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {OBSERVED_FIELDS.map((field) => {
+              const before = item.observed[field];
+              const after = item.current[field];
+              const changed = before !== after;
+              return (
+                <tr key={field} className="border-b border-slate-100">
+                  <td className="py-1.5 pr-2 text-xs text-slate-500">{FIELD_LABEL[field]}</td>
+                  <td className="border-r border-slate-100 py-1.5 pr-3 font-mono text-xs text-slate-600">
+                    {before || <Empty />}
+                  </td>
+                  <td className={`py-1.5 pl-3 font-mono text-xs ${changed ? 'font-semibold text-emerald-700' : 'text-slate-800'}`}>
+                    {after || <Empty />}
+                    {changed && <span className="ml-1 text-[10px] text-emerald-600">수정됨</span>}
+                  </td>
+                </tr>
+              );
+            })}
+            {/* 정규화 품목명은 입력에 없고 산출되는 값이라 따로 표시한다 */}
+            <tr>
+              <td className="py-1.5 pr-2 text-xs text-slate-500">{FIELD_LABEL.normalized_item_name}</td>
+              <td className="border-r border-slate-100 py-1.5 pr-3 text-xs text-slate-400">산출 필드 (입력에 없음)</td>
+              <td className="py-1.5 pl-3 text-xs">
+                {item.normalization.source === 'insufficient' ? (
+                  <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-900">
+                    {INSUFFICIENT_LABEL}
+                  </span>
+                ) : (
+                  <span className="font-mono text-slate-800">{item.current.normalized_item_name}</span>
+                )}
+                <span className="ml-1.5 rounded border border-slate-300 bg-slate-50 px-1 py-0.5 text-[10px] text-slate-500">
+                  {NORMALIZATION_SOURCE_LABEL[item.normalization.source]}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function Box({ label, value, tone = 'slate' }: { label: string; value: string; tone?: 'slate' | 'amber' }) {
+  const style = tone === 'amber'
+    ? 'border-amber-300 bg-amber-50 text-amber-900'
+    : 'border-slate-300 bg-white text-slate-700';
+  return (
+    <div className={`rounded-md border px-2.5 py-1 ${style}`}>
+      <div className="text-[10px] opacity-70">{label}</div>
+      <div className="font-mono text-sm">{value}</div>
+    </div>
+  );
+}
+
+/** 요건 3: "필드 누락은 데이터 부족으로 표시". 빈칸으로 두지 않는다. */
+const Empty = () => (
+  <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-sans text-amber-900">
+    {INSUFFICIENT_LABEL}
+  </span>
+);
