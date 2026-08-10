@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseEvidenceCsv, CsvParseError } from './parseCsv';
-import { buildItems, effectiveFlags } from './pipeline';
-import type { ExceptionFlag, Item, ReviewStatus } from './types';
+import { buildItems, effectiveFlags, recomputeItems } from './pipeline';
+import * as review from './review';
+import type { CurrentFields, ExceptionFlag, Item, ReviewStatus } from './types';
 
 /**
  * 화면 상태 5종. 요건에 명시된 loading·empty·no-results·error·success에 대응한다.
@@ -78,8 +79,8 @@ export function useInbox() {
   // localStorage는 서버 렌더 시점에 없다. 초기값으로 읽으면 하이드레이션이 어긋나므로
   // 마운트 직후 한 번만 복원한다. 상태를 한 덩어리로 합쳐 setState 호출도 한 번이다.
   useEffect(() => {
+    // localStorage는 클라이언트 전용이라 마운트 후에만 읽을 수 있다.
     const backup = readBackup();
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage는 클라이언트 전용이라 마운트 후에만 읽을 수 있다
     if (backup) setData(backup);
     restored.current = true;
   }, []);
@@ -145,6 +146,38 @@ export function useInbox() {
     [],
   );
 
+  /**
+   * 항목 하나를 바꾸고 목록 전체를 다시 계산한다.
+   * 값이 바뀌면 예외 판정과 중복 그룹이 함께 달라지기 때문이다.
+   */
+  const updateItem = useCallback(
+    (docId: string, fn: (item: Item, at: string) => Item) => {
+      const at = new Date().toISOString();
+      setData((prev) => ({
+        ...prev,
+        items: recomputeItems(
+          prev.items.map((item) => (item.doc_id === docId ? fn(item, at) : item)),
+        ),
+      }));
+    },
+    [],
+  );
+
+  const actions = useMemo(
+    () => ({
+      editField: (docId: string, field: keyof CurrentFields, value: string) =>
+        updateItem(docId, (item, at) => review.editField(item, field, value, at)),
+      approve: (docId: string) => updateItem(docId, review.approve),
+      reject: (docId: string) => updateItem(docId, review.reject),
+      reopen: (docId: string) => updateItem(docId, review.reopen),
+      toggleDuplicateDismissed: (docId: string) =>
+        updateItem(docId, review.toggleDuplicateDismissed),
+      setMemo: (docId: string, memo: string) =>
+        updateItem(docId, (item) => review.setMemo(item, memo)),
+    }),
+    [updateItem],
+  );
+
   const filtered = useMemo(
     () =>
       data.items.filter((item) => {
@@ -183,5 +216,6 @@ export function useInbox() {
     selectedId: data.selectedId,
     filtered, counts, selected,
     setFilters, setSelectedId, load, reset,
+    ...actions,
   };
 }

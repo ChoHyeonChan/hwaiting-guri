@@ -6,19 +6,31 @@ import {
   STATUS_LABEL, STATUS_STYLE, flagEvidence,
 } from '@/lib/labels';
 import { INSUFFICIENT_LABEL } from '@/lib/normalize';
-import type { Item, ItemFields } from '@/lib/types';
+import { ReviewActions } from './ReviewActions';
+import { ChangeLogPanel } from './ChangeLogPanel';
+import type { CurrentFields, Item, ItemFields } from '@/lib/types';
 
 const OBSERVED_FIELDS: (keyof ItemFields)[] = [
   'source_type', 'supplier_name', 'raw_item_name', 'spec', 'unit',
   'price_before', 'price_after', 'effective_date',
 ];
 
+export interface ReviewHandlers {
+  editField: (docId: string, field: keyof CurrentFields, value: string) => void;
+  approve: (docId: string) => void;
+  reject: (docId: string) => void;
+  reopen: (docId: string) => void;
+  toggleDuplicateDismissed: (docId: string) => void;
+  setMemo: (docId: string, memo: string) => void;
+}
+
 interface Props {
   item: Item | null;
   onSelect: (docId: string) => void;
+  actions: ReviewHandlers;
 }
 
-export function ItemDetail({ item, onSelect }: Props) {
+export function ItemDetail({ item, onSelect, actions }: Props) {
   if (!item) {
     return (
       <section className="rounded-lg border border-slate-200 bg-white px-4 py-14 text-center text-sm text-slate-500">
@@ -156,9 +168,14 @@ export function ItemDetail({ item, onSelect }: Props) {
                   <td className="border-r border-slate-100 py-1.5 pr-3 font-mono text-xs text-slate-600">
                     {before || <Empty />}
                   </td>
-                  <td className={`py-1.5 pl-3 font-mono text-xs ${changed ? 'font-semibold text-emerald-700' : 'text-slate-800'}`}>
-                    {after || <Empty />}
-                    {changed && <span className="ml-1 text-[10px] text-emerald-600">수정됨</span>}
+                  <td className="py-1 pl-3">
+                    <EditableValue
+                      docId={item.doc_id}
+                      field={field}
+                      value={after}
+                      changed={changed}
+                      onCommit={actions.editField}
+                    />
                   </td>
                 </tr>
               );
@@ -167,23 +184,77 @@ export function ItemDetail({ item, onSelect }: Props) {
             <tr>
               <td className="py-1.5 pr-2 text-xs text-slate-500">{FIELD_LABEL.normalized_item_name}</td>
               <td className="border-r border-slate-100 py-1.5 pr-3 text-xs text-slate-400">산출 필드 (입력에 없음)</td>
-              <td className="py-1.5 pl-3 text-xs">
-                {item.normalization.source === 'insufficient' ? (
-                  <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-900">
-                    {INSUFFICIENT_LABEL}
+              <td className="py-1 pl-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <EditableValue
+                    docId={item.doc_id}
+                    field="normalized_item_name"
+                    value={item.current.normalized_item_name}
+                    changed={false}
+                    placeholder={INSUFFICIENT_LABEL}
+                    onCommit={actions.editField}
+                  />
+                  <span className="shrink-0 rounded border border-slate-300 bg-slate-50 px-1 py-0.5 text-[10px] text-slate-500">
+                    {NORMALIZATION_SOURCE_LABEL[item.normalization.source]}
                   </span>
-                ) : (
-                  <span className="font-mono text-slate-800">{item.current.normalized_item_name}</span>
-                )}
-                <span className="ml-1.5 rounded border border-slate-300 bg-slate-50 px-1 py-0.5 text-[10px] text-slate-500">
-                  {NORMALIZATION_SOURCE_LABEL[item.normalization.source]}
-                </span>
+                </div>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      <ReviewActions
+        item={item}
+        onApprove={actions.approve}
+        onReject={actions.reject}
+        onReopen={actions.reopen}
+        onToggleDuplicate={actions.toggleDuplicateDismissed}
+        onMemo={actions.setMemo}
+      />
+
+      <ChangeLogPanel item={item} />
     </section>
+  );
+}
+
+/**
+ * 수정값 입력칸.
+ *
+ * key에 현재 값을 넣어 값이 바뀌면 새로 마운트되게 했다. 이렇게 하면
+ * effect로 상태를 되돌릴 필요가 없어 입력 도중 값이 튀지 않는다.
+ * 커밋은 포커스가 빠질 때, 엔터를 누르면 포커스를 빼서 같은 경로를 탄다.
+ */
+function EditableValue({
+  docId, field, value, changed, placeholder, onCommit,
+}: {
+  docId: string;
+  field: keyof CurrentFields;
+  value: string;
+  changed: boolean;
+  placeholder?: string;
+  onCommit: (docId: string, field: keyof CurrentFields, value: string) => void;
+}) {
+  return (
+    <div className="flex w-full items-center gap-1">
+      <input
+        key={`${docId}:${field}:${value}`}
+        defaultValue={value}
+        placeholder={placeholder}
+        onBlur={(e) => onCommit(docId, field, e.target.value.trim())}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') {
+            e.currentTarget.value = value;
+            e.currentTarget.blur();
+          }
+        }}
+        className={`w-full rounded border border-transparent bg-transparent px-1 py-0.5 font-mono text-xs outline-none hover:border-slate-300 focus:border-slate-500 focus:bg-white ${
+          changed ? 'font-semibold text-emerald-700' : 'text-slate-800'
+        } ${value === '' ? 'placeholder:text-amber-600' : ''}`}
+      />
+      {changed && <span className="shrink-0 text-[10px] text-emerald-600">수정됨</span>}
+    </div>
   );
 }
 

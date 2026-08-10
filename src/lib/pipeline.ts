@@ -66,6 +66,33 @@ function buildItem(row: ParsedRow, fileName: string): Item {
 }
 
 /**
+ * 사람이 값을 고친 뒤 예외와 상태를 다시 계산한다.
+ *
+ * 값이 바뀌면 판정도 바뀐다. 비어 있던 적용일을 채우면 필수값 누락이 풀리고,
+ * 정규화 품목명을 고치면 중복 그룹이 달라진다. 중복은 목록 전체를 봐야 하므로
+ * 한 항목만 다시 계산할 수 없고 매번 전체를 다시 돌린다.
+ *
+ * 사람이 남긴 것(review_status, 메모, 변경 이력, 중복 아님 표시)은 보존한다.
+ */
+export function recomputeItems(items: Item[]): Item[] {
+  const next: Item[] = items.map((item) => {
+    const outcome = detectRowExceptions(item);
+    return {
+      ...item,
+      exception_flags: outcome.flags,
+      exception_reasons: outcome.reasons,
+      spec_change: outcome.specChange,
+      duplicate_of: null,
+      duplicate_members: [],
+    };
+  });
+
+  detectDuplicates(next);
+  for (const item of next) item.review_status = decideStatus(item);
+  return next;
+}
+
+/**
  * 상태 결정 규칙.
  *
  *   missing_required 있음                      -> needs_review (확인 필요)

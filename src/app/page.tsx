@@ -41,7 +41,18 @@ export default function Home() {
             selectedId={inbox.selectedId}
             onSelect={inbox.setSelectedId}
           />
-          <ItemDetail item={inbox.selected} onSelect={inbox.setSelectedId} />
+          <ItemDetail
+            item={inbox.selected}
+            onSelect={inbox.setSelectedId}
+            actions={{
+              editField: inbox.editField,
+              approve: inbox.approve,
+              reject: inbox.reject,
+              reopen: inbox.reopen,
+              toggleDuplicateDismissed: inbox.toggleDuplicateDismissed,
+              setMemo: inbox.setMemo,
+            }}
+          />
         </div>
       </div>
     </main>
