@@ -66,6 +66,21 @@ function expectationFor(docId: string): Expectation {
 
 const sorted = (flags: readonly string[]) => [...flags].sort().join(',') || '(없음)';
 
+/**
+ * 표시 폭 기준으로 오른쪽을 공백으로 채운다.
+ *
+ * String.padEnd는 글자 수로 세는데 한글은 콘솔에서 두 칸을 차지한다.
+ * 한글이 섞인 헤더에 padEnd를 쓰면 열이 데이터 행과 어긋난다.
+ * 이 출력을 그대로 검증 자료로 내보내므로 폭을 맞춘다.
+ */
+function pad(text: string, width: number): string {
+  const shown = [...text].reduce(
+    (n, ch) => n + (ch.codePointAt(0)! > 0x10ff ? 2 : 1),
+    0,
+  );
+  return text + ' '.repeat(Math.max(0, width - shown));
+}
+
 let failures = 0;
 
 function check(label: string, actual: string, expected: string): boolean {
@@ -90,7 +105,7 @@ const items = buildItems(parsed.rows, '42_해커톤_업로드용_증빙20건_202
 
 console.log(
   ['문서ID', '행', '탐지 플래그', '상태', '판정'].map((h, i) =>
-    h.padEnd([9, 4, 34, 14, 6][i]),
+    pad(h, [9, 4, 34, 14, 6][i]),
   ).join(''),
 );
 console.log('-'.repeat(72));
@@ -106,10 +121,10 @@ for (const item of items) {
   const isException = exp.flags.length > 0;
   if (isException || mark === 'FAIL') {
     console.log(
-      item.doc_id.padEnd(9) +
-        String(item.source_ref.row_no).padEnd(4) +
-        actualFlags.padEnd(34) +
-        item.review_status.padEnd(14) +
+      pad(item.doc_id, 9) +
+        pad(String(item.source_ref.row_no), 4) +
+        pad(actualFlags, 34) +
+        pad(item.review_status, 14) +
         mark,
     );
     if (!flagOk) console.log(`          기대 플래그: ${expectedFlags}`);
@@ -164,7 +179,7 @@ console.log(bySource);
 console.log('예시:');
 for (const it of items.slice(0, 3)) {
   console.log(
-    `  ${it.doc_id}  ${it.observed.raw_item_name.padEnd(18)} -> ${it.current.normalized_item_name}  (${it.normalization.source})`,
+    `  ${it.doc_id}  ${pad(it.observed.raw_item_name, 18)} -> ${it.current.normalized_item_name}  (${it.normalization.source})`,
   );
 }
 
@@ -323,7 +338,7 @@ const formatItems = buildItems(
 
 console.log(
   ['문서ID', '형식 오류 필드', '상태', '승인', '판정'].map((h, i) =>
-    h.padEnd([9, 42, 14, 6, 6][i]),
+    pad(h, [9, 42, 14, 6, 6][i]),
   ).join(''),
 );
 console.log('-'.repeat(72));
@@ -341,10 +356,10 @@ for (const item of formatItems) {
 
   console.log(
     [
-      item.doc_id.padEnd(9),
-      (actualFields.join(', ') || '(없음)').padEnd(42),
-      item.review_status.padEnd(14),
-      (approvable ? '가능' : '차단').padEnd(6),
+      pad(item.doc_id, 9),
+      pad(actualFields.join(', ') || '(없음)', 42),
+      pad(item.review_status, 14),
+      pad(approvable ? '가능' : '차단', 6),
       ok ? 'PASS' : 'FAIL',
     ].join(''),
   );
@@ -480,7 +495,7 @@ for (const c of [
 ]) {
   const item = withMemo(c.docId, c.memo);
   const ok = check('memoGate', String(canApprove(item)), String(c.can));
-  console.log(`  ${c.note.padEnd(46)} ${ok ? 'PASS' : `FAIL (실제 ${canApprove(item)})`}`);
+  console.log(`  ${pad(c.note, 52)} ${ok ? 'PASS' : `FAIL (실제 ${canApprove(item)})`}`);
 }
 
 // 해소한 경우에는 근거를 요구하지 않아야 한다.
@@ -491,7 +506,7 @@ const dismissed = recomputeItems(
 ).find((i) => i.doc_id === 'DOC-018')!;
 const dismissOk = check('dismissGate', String(canApprove(dismissed)), 'true');
 console.log(
-  `  ${'중복 아님으로 해소 · 메모 없음 -> 승인 가능'.padEnd(46)} ${dismissOk ? 'PASS' : 'FAIL'}`,
+  `  ${pad('중복 아님으로 해소 · 메모 없음 -> 승인 가능', 52)} ${dismissOk ? 'PASS' : 'FAIL'}`,
 );
 console.log('    -> 근거를 요구하는 것은 예외를 "수용"할 때뿐이다. "해소"에는 요구하지 않는다.');
 
