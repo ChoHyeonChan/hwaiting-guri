@@ -75,6 +75,8 @@ export interface SourceRef {
   file_name: string | null;
   /** 헤더를 1행으로 세는 1-indexed 행 번호. 수기 입력이면 null */
   row_no: number | null;
+  /** 몇 번째 인입인지. 같은 파일을 다시 올리면 2가 된다. 1부터 */
+  batch_no: number;
 }
 
 export interface ChangeLogEntry {
@@ -86,6 +88,16 @@ export interface ChangeLogEntry {
 }
 
 export interface Item {
+  /**
+   * 시스템 내부 식별자.
+   *
+   * 문서ID는 같은 파일을 다시 올리면 중복되므로 유일 키로 쓸 수 없다.
+   * 문서ID를 키로 강제하면 재업로드에서 저장이 실패한다.
+   */
+  uid: string;
+  /** 시스템 인입 순번. 중복 그룹에서 어느 쪽이 기준 항목인지 정하는 기준이다. */
+  intake_seq: number;
+
   doc_id: string;
   source_ref: SourceRef;
 
@@ -102,10 +114,12 @@ export interface Item {
   /** 규격이 "기존 A / 변경 B" 형태일 때 캡처한 값 */
   spec_change: { old: string; new: string } | null;
 
-  /** 중복 그룹의 기준 항목 doc_id. 기준 항목 자신은 null */
+  /** 중복 그룹 기준 항목의 uid. 기준 항목 자신은 null */
   duplicate_of: string | null;
-  /** 같은 그룹에 속한 후속 항목들(기준 항목에만 채움). 이동 링크용 */
-  duplicate_members: string[];
+  /** 기준 항목의 문서ID. 화면 표시용 */
+  duplicate_of_doc_id: string | null;
+  /** 같은 그룹의 후속 항목들(기준 항목에만 채움). 이동 링크용 */
+  duplicate_members: { uid: string; doc_id: string }[];
   /** 사람이 "중복 아님"으로 되돌렸는지 */
   duplicate_dismissed: boolean;
 

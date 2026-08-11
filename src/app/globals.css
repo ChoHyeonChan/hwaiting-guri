@@ -1,26 +1,27 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * 브랜드 컬러는 창업팀이 정본 4번 시트에서 지정한 값이다.
+ *   Comfozi Navy #1A3356 / Gold #C89C4A / Surface #F6F4F0
+ * soft 계열은 표 배경과 hover에 쓰려고 같은 색을 옅게 만든 보조색이다.
+ */
+@theme {
+  --color-navy: #1a3356;
+  --color-navy-mid: #2c4a75;
+  --color-navy-soft: #e9edf3;
+  --color-gold: #c89c4a;
+  --color-gold-soft: #f7efe0;
+  --color-gold-line: #e0cba4;
+  --color-surface: #f6f4f0;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/*
+ * 사용 환경이 사무실 데스크톱 크롬으로 고정돼 있어 라이트 한 가지로 둔다.
+ * 다크 모드 자동 전환을 켜두면 심사자 브라우저 설정에 따라 배경만 검게 바뀌어
+ * 흰 카드와 섞인 화면이 나온다.
+ */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-surface);
+  color: #1f2937;
+  font-family: "Malgun Gothic", "맑은 고딕", -apple-system, BlinkMacSystemFont, sans-serif;
 }

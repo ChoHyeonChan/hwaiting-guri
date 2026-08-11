@@ -15,8 +15,31 @@ import type { ParsedRow } from './parseCsv';
  * 순서: 필드 매핑 -> 정규화 후보 -> 항목 단위 예외 -> 중복 -> 상태 결정
  * 중복은 정규화 품목명을 키에 쓰므로 정규화 뒤에 와야 한다.
  */
-export function buildItems(rows: ParsedRow[], fileName: string): Item[] {
-  const items = rows.map((row) => buildItem(row, fileName));
+export interface IntakeContext {
+  /** 몇 번째 인입인지. 1부터 */
+  batchNo: number;
+  /** 이미 인입된 항목 수. 새 항목의 intake_seq는 여기서 이어진다 */
+  startSeq: number;
+}
+
+/**
+ * 파싱된 행을 검수 대상 Item으로 만들어 **기존 목록 뒤에 이어 붙인다**.
+ *
+ * 같은 파일을 다시 올려도 기존 항목을 덮어쓰지 않는다. 중복 판정의 비교 범위가
+ * "같은 파일 안"이 아니라 "이미 인입된 전체 항목(승인 완료 포함)"이기 때문이다.
+ * 재발송 공문이나 실수로 두 번 올린 파일에서 같은 인상분이 두 번 반영되는 사고를
+ * 잡으려면 새 인입분이 기존 항목과 비교돼야 한다.
+ */
+export function buildItems(
+  rows: ParsedRow[],
+  fileName: string,
+  existing: Item[] = [],
+  ctx: IntakeContext = { batchNo: 1, startSeq: 0 },
+): Item[] {
+  const incoming = rows.map((row, i) =>
+    buildItem(row, fileName, ctx.batchNo, ctx.startSeq + i + 1),
+  );
+  const items = [...existing, ...incoming];
 
   detectDuplicates(items);
   for (const item of items) {
@@ -26,7 +49,12 @@ export function buildItems(rows: ParsedRow[], fileName: string): Item[] {
   return items;
 }
 
-function buildItem(row: ParsedRow, fileName: string): Item {
+function buildItem(
+  row: ParsedRow,
+  fileName: string,
+  batchNo: number,
+  intakeSeq: number,
+): Item {
   const observed = {} as ItemFields;
   let docId = '';
 
@@ -40,13 +68,21 @@ function buildItem(row: ParsedRow, fileName: string): Item {
   const normalization = normalizeItemName(observed.raw_item_name);
 
   const item: Item = {
+    uid: `${intakeSeq}:${docId}`,
+    intake_seq: intakeSeq,
     doc_id: docId,
-    source_ref: { input_method: 'file', file_name: fileName, row_no: row.rowNo },
+    source_ref: {
+      input_method: 'file',
+      file_name: fileName,
+      row_no: row.rowNo,
+      batch_no: batchNo,
+    },
     observed,
     current: { ...observed, normalized_item_name: normalization.candidate },
     normalization,
     spec_change: null,
     duplicate_of: null,
+    duplicate_of_doc_id: null,
     duplicate_members: [],
     duplicate_dismissed: false,
     exception_flags: [],
@@ -83,6 +119,7 @@ export function recomputeItems(items: Item[]): Item[] {
       exception_reasons: outcome.reasons,
       spec_change: outcome.specChange,
       duplicate_of: null,
+      duplicate_of_doc_id: null,
       duplicate_members: [],
     };
   });

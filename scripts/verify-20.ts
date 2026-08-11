@@ -16,6 +16,7 @@ import { parseEvidenceCsv, type ParsedRow } from '../src/lib/parseCsv';
 import { buildItems } from '../src/lib/pipeline';
 import type { ExceptionFlag, ReviewStatus } from '../src/lib/types';
 
+const CSV_NAME = '42_해커톤_업로드용_증빙20건_2026-08-04.csv';
 const CSV_PATH = resolve(
   import.meta.dirname,
   '../../42_해커톤_업로드용_증빙20건_2026-08-04.csv',
@@ -159,59 +160,112 @@ console.log('='.repeat(72));
 console.log('3. 하드코딩 없음 검증 (문서ID 변경 + 행 순서 섞기)');
 console.log('='.repeat(72));
 
-/** 문서ID를 새로 매기고 행 순서를 뒤집은 입력을 만든다. */
-function remap(idFor: (idx: number) => string) {
-  const idMap = new Map<string, string>();
-  const rows: ParsedRow[] = parsed.rows.map((row, idx) => {
-    const newId = idFor(idx);
-    idMap.set(row.values['문서ID'], newId);
-    return { rowNo: row.rowNo, values: { ...row.values, '문서ID': newId } };
-  });
-  rows.reverse(); // 행 순서도 섞는다
-  return { idMap, items: buildItems(rows, 'shuffled.csv') };
-}
-
-// (a) 문서ID를 전부 바꾸되 대소 순서는 유지 + 행 순서만 뒤집기
-//     판정이 데이터에서 나온다면 모든 항목의 플래그가 그대로여야 한다.
-const ascending = remap((idx) => `EVD-${String(100 + idx).padStart(3, '0')}`);
-const byNewId = new Map(ascending.items.map((i) => [i.doc_id, i]));
+// (a) 문서ID만 전부 바꾸고 행 순서는 그대로 두면 판정이 동일해야 한다.
+//     인입 순서가 같으므로 중복 그룹의 기준 항목도 그대로다.
+const renamedRows: ParsedRow[] = parsed.rows.map((row, idx) => ({
+  rowNo: row.rowNo,
+  values: { ...row.values, '문서ID': `EVD-${String(100 + idx).padStart(3, '0')}` },
+}));
+const renamed = buildItems(renamedRows, 'renamed.csv');
 
 let mismatch = 0;
-for (const original of items) {
-  const moved = byNewId.get(ascending.idMap.get(original.doc_id)!)!;
+items.forEach((original, idx) => {
+  const moved = renamed[idx];
   const a = sorted(original.exception_flags);
   const b = sorted(moved.exception_flags);
   if (a !== b) {
     mismatch += 1;
     console.log(`  FAIL ${original.doc_id} -> ${moved.doc_id}:  ${a}  vs  ${b}`);
   }
-}
+});
 failures += mismatch;
 if (mismatch === 0) {
-  console.log('  (a) 문서ID를 전부 바꾸고 행 순서를 뒤집어도 20건 판정이 모두 동일했다.');
+  console.log('  (a) 문서ID를 전부 바꿔도 20건 판정이 모두 동일했다.');
   console.log('      -> 판정이 문서ID가 아니라 데이터에서 나온다는 증거.');
 }
 
-// (b) 문서ID 대소 순서를 반대로 매기면 중복 그룹의 기준 항목이 바뀌어야 한다.
-//     명세: "문서ID 오름차순, 그룹의 첫 건은 기준 항목, 두 번째 이후에 중복 의심"
-const descending = remap((idx) => `EVD-${String(900 - idx).padStart(3, '0')}`);
-const flippedDup = descending.items.find((i) =>
-  i.exception_flags.includes('duplicate_suspected'),
-);
-const originalDup = items.find((i) => i.exception_flags.includes('duplicate_suspected'));
+// (b) 행 순서를 뒤집으면 중복 그룹의 기준 항목이 따라 바뀌어야 한다.
+//     명세 §2의 "문서ID 오름차순"은 단일 파일 전제이고, 회신(2026-08-11)에서
+//     업로드가 여러 번이면 "시스템 인입 순서"로 일반화하도록 확정됐다.
+//     먼저 들어온 쪽이 기준이므로, 순서를 뒤집으면 기준도 뒤바뀐다.
+const reversedRows = [...parsed.rows].reverse();
+const reversed = buildItems(reversedRows, 'reversed.csv');
 
-// 원본에서 DOC-018(뒤 ID)이 중복이었으므로, ID 순서를 뒤집으면
-// 원래 DOC-017이었던 항목이 중복으로 잡혀야 한다.
-const expectedFlipped = descending.idMap.get('DOC-017');
-const flipOk = flippedDup?.doc_id === expectedFlipped;
+const originalDup = items.find((i) => i.exception_flags.includes('duplicate_suspected'));
+const reversedDup = reversed.find((i) => i.exception_flags.includes('duplicate_suspected'));
+
+// 원본은 DOC-017이 먼저 들어와 기준, DOC-018이 중복.
+// 뒤집으면 DOC-018이 먼저라 기준이 되고 DOC-017이 중복으로 잡혀야 한다.
+const flipOk =
+  originalDup?.doc_id === 'DOC-018' &&
+  originalDup?.duplicate_of_doc_id === 'DOC-017' &&
+  reversedDup?.doc_id === 'DOC-017' &&
+  reversedDup?.duplicate_of_doc_id === 'DOC-018';
 if (!flipOk) failures += 1;
 
 console.log('');
-console.log(`  (b) 원본      중복 의심: ${originalDup?.doc_id} (기준 ${originalDup?.duplicate_of})`);
+console.log(`  (b) 원본      중복 의심: ${originalDup?.doc_id} (기준 ${originalDup?.duplicate_of_doc_id})`);
 console.log(
-  `      ID 순서 반전: ${flippedDup?.doc_id} (기준 ${flippedDup?.duplicate_of})  ${flipOk ? 'PASS' : 'FAIL'}`,
+  `      행 순서 반전: ${reversedDup?.doc_id} (기준 ${reversedDup?.duplicate_of_doc_id})  ${flipOk ? 'PASS' : 'FAIL'}`,
 );
-console.log('      -> 기준 항목이 문서ID 순서를 따라 바뀐다. 특정 ID에 고정돼 있지 않다.');
+console.log('      -> 기준 항목이 인입 순서를 따라 바뀐다. 특정 ID에 고정돼 있지 않다.');
+
+// ------------------------------------------- 4차: 같은 파일 2회 업로드
+console.log('');
+console.log('='.repeat(72));
+console.log('4. 같은 파일 2회 업로드 (창업팀 회신 2026-08-11)');
+console.log('='.repeat(72));
+
+const twice = buildItems(parsed.rows, CSV_NAME, items, {
+  batchNo: 2,
+  startSeq: items.length,
+});
+const first = twice.slice(0, 20);
+const second = twice.slice(20);
+
+/** 2회차 기대: 1회차 플래그 + duplicate_suspected */
+const expectedSecond: Record<string, string> = {
+  'DOC-016': 'duplicate_suspected,missing_required',
+  'DOC-019': 'duplicate_suspected,spec_mismatch',
+  'DOC-020': 'duplicate_suspected,spec_mismatch,unit_mismatch',
+};
+const DEFAULT_SECOND = 'duplicate_suspected';
+
+let firstChanged = 0;
+items.forEach((before, i) => {
+  if (sorted(before.exception_flags) !== sorted(first[i].exception_flags)) {
+    firstChanged += 1;
+    console.log(`  FAIL 1회차 ${before.doc_id} 판정이 바뀌었다`);
+  }
+});
+failures += firstChanged;
+if (firstChanged === 0) console.log('  1회차 20건은 판정 변화 없음 (기준 항목)');
+
+let secondFail = 0;
+for (const item of second) {
+  const expected = expectedSecond[item.doc_id] ?? DEFAULT_SECOND;
+  const actual = sorted(item.exception_flags);
+  const statusExpected = item.exception_flags.includes('missing_required')
+    ? 'needs_review'
+    : 'on_hold';
+  if (actual !== expected || item.review_status !== statusExpected) {
+    secondFail += 1;
+    console.log(`  FAIL 2회차 ${item.doc_id}: ${actual} / ${item.review_status}`);
+    console.log(`       기대: ${expected} / ${statusExpected}`);
+  }
+}
+failures += secondFail;
+if (secondFail === 0) {
+  console.log('  2회차 20건 전부 duplicate_suspected 부착, 고유 예외는 병기됨');
+  console.log(`    DOC-016 -> ${sorted(second[15].exception_flags)} / ${second[15].review_status}`);
+  console.log(`    DOC-020 -> ${sorted(second[19].exception_flags)} / ${second[19].review_status}`);
+}
+
+const uids = new Set(twice.map((i) => i.uid));
+const uidOk = uids.size === 40;
+if (!uidOk) failures += 1;
+console.log(`  총 ${twice.length}건 · 고유 uid ${uids.size}개  ${uidOk ? 'PASS' : 'FAIL'}`);
+console.log('    -> 문서ID가 겹쳐도 내부 식별자는 유일하다.');
 
 // ---------------------------------------------------------------- 결과
 console.log('');

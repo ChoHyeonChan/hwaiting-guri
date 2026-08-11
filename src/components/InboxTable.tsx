@@ -30,7 +30,7 @@ export function InboxTable({
   return (
     <section className="rounded-lg border border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3">
-        <h2 className="mr-2 text-sm font-semibold text-slate-800">검수 인박스</h2>
+        <h2 className="mr-2 text-sm font-semibold text-navy">검수 인박스</h2>
 
         <FilterGroup
           label="상태"
@@ -91,7 +91,7 @@ export function InboxTable({
       {loadState !== 'loading' && filtered.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs text-slate-600">
+            <thead className="border-b border-slate-200 bg-surface text-xs text-navy">
               <tr>
                 <Th>문서ID</Th>
                 <Th>공급사</Th>
@@ -105,13 +105,13 @@ export function InboxTable({
             <tbody>
               {filtered.map((item) => {
                 const flags = effectiveFlags(item);
-                const selected = item.doc_id === selectedId;
+                const selected = item.uid === selectedId;
                 return (
                   <tr
-                    key={item.doc_id}
-                    onClick={() => onSelect(item.doc_id)}
+                    key={item.uid}
+                    onClick={() => onSelect(item.uid)}
                     className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50 ${
-                      selected ? 'bg-sky-50 hover:bg-sky-50' : ''
+                      selected ? 'bg-gold-soft hover:bg-gold-soft' : ''
                     }`}
                   >
                     <Td>
@@ -194,7 +194,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       onClick={onClick}
       className={`rounded-full border px-2.5 py-0.5 text-xs transition ${
         active
-          ? 'border-slate-900 bg-slate-900 text-white'
+          ? 'border-navy bg-navy text-white'
           : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
       }`}
     >

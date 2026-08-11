@@ -23,12 +23,31 @@ interface InboxData {
   fileName: string | null;
   warnings: string[];
   filters: Filters;
+  /** 선택된 항목의 uid. 문서ID는 재업로드로 중복되므로 쓰지 않는다 */
   selectedId: string | null;
   loadState: LoadState;
   errorMessage: string;
+  /** 지금까지 인입한 횟수 */
+  batchCount: number;
+  /** 인입한 파일의 내용 해시 목록. 같은 파일 재업로드 안내에 쓴다 */
+  fileHashes: string[];
+  /** 직전 인입 결과 요약. 누적 인입이라 몇 건이 새로 들어왔는지 알려준다 */
+  lastIntake: { batchNo: number; added: number; duplicates: number } | null;
 }
 
-const STORAGE_KEY = 'hwaiting-guri.inbox.v1';
+/** 항목 구조가 바뀌면 버전을 올린다. 예전 백업은 무시하고 빈 상태로 시작한다. */
+const STORAGE_KEY = 'hwaiting-guri.inbox.v2';
+
+/**
+ * 같은 파일을 두 번 올렸는지 알아보기 위한 내용 해시.
+ * 파일 단위 차단용이 아니라 "이미 올린 파일입니다" 안내를 띄우는 용도다.
+ * 한 행만 고쳐 재송부된 파일은 해시가 달라지므로, 중복 탐지는 어차피 행 단위로 돈다.
+ */
+function contentHash(text: string): string {
+  let h = 5381;
+  for (let i = 0; i < text.length; i += 1) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
 const DEFAULT_FILTERS: Filters = { status: 'all', flag: 'all' };
 
 const EMPTY: InboxData = {
@@ -39,6 +58,9 @@ const EMPTY: InboxData = {
   selectedId: null,
   loadState: 'idle',
   errorMessage: '',
+  batchCount: 0,
+  fileHashes: [],
+  lastIntake: null,
 };
 
 /** 저장 대상. loadState와 errorMessage는 다시 계산되므로 저장하지 않는다. */
@@ -58,6 +80,9 @@ function readBackup(): InboxData | null {
       selectedId: saved.selectedId ?? null,
       loadState: 'success',
       errorMessage: '',
+      batchCount: saved.batchCount ?? 1,
+      fileHashes: saved.fileHashes ?? [],
+      lastIntake: saved.lastIntake ?? null,
     };
   } catch {
     // 백업이 깨졌으면 무시하고 빈 상태로 시작한다. 원본은 파일에 있다.
@@ -75,6 +100,11 @@ function readBackup(): InboxData | null {
 export function useInbox() {
   const [data, setData] = useState<InboxData>(EMPTY);
   const restored = useRef(false);
+  /** 이미 올린 파일을 또 올렸을 때 확인을 받으려고 잠시 들고 있는 내용 */
+  const [pendingFile, setPendingFile] = useState<{ name: string; text: string } | null>(null);
+  /** load 안에서 최신 해시 목록을 읽어야 해서 ref로도 들고 있는다 */
+  const hashesRef = useRef<string[]>([]);
+  hashesRef.current = data.fileHashes;
 
   // localStorage는 서버 렌더 시점에 없다. 초기값으로 읽으면 하이드레이션이 어긋나므로
   // 마운트 직후 한 번만 복원한다. 상태를 한 덩어리로 합쳐 setState 호출도 한 번이다.
@@ -99,6 +129,9 @@ export function useInbox() {
         warnings: data.warnings,
         filters: data.filters,
         selectedId: data.selectedId,
+        batchCount: data.batchCount,
+        fileHashes: data.fileHashes,
+        lastIntake: data.lastIntake,
       };
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {
@@ -106,20 +139,36 @@ export function useInbox() {
     }
   }, [data]);
 
-  const load = useCallback(async (file: File) => {
-    setData((prev) => ({ ...prev, loadState: 'loading', errorMessage: '' }));
+  /** 파싱된 내용을 실제로 인입한다. 확인 절차를 거친 뒤 호출된다. */
+  const commit = useCallback((name: string, text: string) => {
     try {
-      const text = await file.text();
       const parsed = parseEvidenceCsv(text);
-      const items = buildItems(parsed.rows, file.name);
-      setData({
-        items,
-        fileName: file.name,
-        warnings: parsed.warnings,
-        filters: DEFAULT_FILTERS,
-        selectedId: items[0]?.doc_id ?? null,
-        loadState: 'success',
-        errorMessage: '',
+      const hash = contentHash(text);
+
+      setData((prev) => {
+        const batchNo = prev.batchCount + 1;
+        const items = buildItems(parsed.rows, name, prev.items, {
+          batchNo,
+          startSeq: prev.items.length,
+        });
+        const incoming = items.slice(prev.items.length);
+        const duplicates = incoming.filter((i) =>
+          i.exception_flags.includes('duplicate_suspected'),
+        ).length;
+
+        return {
+          ...prev,
+          items,
+          fileName: name,
+          warnings: parsed.warnings,
+          filters: DEFAULT_FILTERS,
+          selectedId: incoming[0]?.uid ?? prev.selectedId,
+          loadState: 'success',
+          errorMessage: '',
+          batchCount: batchNo,
+          fileHashes: [...prev.fileHashes, hash],
+          lastIntake: { batchNo, added: incoming.length, duplicates },
+        };
       });
     } catch (error) {
       // 읽기에 실패해도 이미 검수 중이던 목록은 지우지 않는다.
@@ -135,7 +184,44 @@ export function useInbox() {
     }
   }, []);
 
-  const reset = useCallback(() => setData(EMPTY), []);
+  /**
+   * 파일을 읽어 **기존 목록 뒤에 이어 붙인다**. 덮어쓰지 않는다.
+   *
+   * 같은 파일을 다시 올리면 두 번째 인입분이 전부 중복 의심으로 잡힌다.
+   * 담당자가 실수로 두 번 올리거나 공급사가 재발송했을 때 같은 인상분이
+   * 두 번 반영되는 사고를 잡는 것이 이 기능의 목적이다.
+   *
+   * 이미 올린 것과 내용이 같은 파일이면 바로 넣지 않고 먼저 확인을 받는다.
+   * 조용히 무시하지도, 조용히 넣지도 않는다.
+   */
+  const load = useCallback(
+    async (file: File) => {
+      setData((prev) => ({ ...prev, loadState: 'loading', errorMessage: '' }));
+      const text = await file.text();
+
+      if (hashesRef.current.includes(contentHash(text))) {
+        setPendingFile({ name: file.name, text });
+        setData((prev) => ({ ...prev, loadState: 'success' }));
+        return;
+      }
+      commit(file.name, text);
+    },
+    [commit],
+  );
+
+  /** 같은 파일 확인 안내에서 계속 진행을 고른 경우 */
+  const confirmPendingFile = useCallback(() => {
+    if (!pendingFile) return;
+    commit(pendingFile.name, pendingFile.text);
+    setPendingFile(null);
+  }, [pendingFile, commit]);
+
+  const cancelPendingFile = useCallback(() => setPendingFile(null), []);
+
+  const reset = useCallback(() => {
+    setPendingFile(null);
+    setData(EMPTY);
+  }, []);
 
   const setFilters = useCallback(
     (filters: Filters) => setData((prev) => ({ ...prev, filters })),
@@ -151,12 +237,12 @@ export function useInbox() {
    * 값이 바뀌면 예외 판정과 중복 그룹이 함께 달라지기 때문이다.
    */
   const updateItem = useCallback(
-    (docId: string, fn: (item: Item, at: string) => Item) => {
+    (uid: string, fn: (item: Item, at: string) => Item) => {
       const at = new Date().toISOString();
       setData((prev) => ({
         ...prev,
         items: recomputeItems(
-          prev.items.map((item) => (item.doc_id === docId ? fn(item, at) : item)),
+          prev.items.map((item) => (item.uid === uid ? fn(item, at) : item)),
         ),
       }));
     },
@@ -165,15 +251,15 @@ export function useInbox() {
 
   const actions = useMemo(
     () => ({
-      editField: (docId: string, field: keyof CurrentFields, value: string) =>
-        updateItem(docId, (item, at) => review.editField(item, field, value, at)),
-      approve: (docId: string) => updateItem(docId, review.approve),
-      reject: (docId: string) => updateItem(docId, review.reject),
-      reopen: (docId: string) => updateItem(docId, review.reopen),
-      toggleDuplicateDismissed: (docId: string) =>
-        updateItem(docId, review.toggleDuplicateDismissed),
-      setMemo: (docId: string, memo: string) =>
-        updateItem(docId, (item) => review.setMemo(item, memo)),
+      editField: (uid: string, field: keyof CurrentFields, value: string) =>
+        updateItem(uid, (item, at) => review.editField(item, field, value, at)),
+      approve: (uid: string) => updateItem(uid, review.approve),
+      reject: (uid: string) => updateItem(uid, review.reject),
+      reopen: (uid: string) => updateItem(uid, review.reopen),
+      toggleDuplicateDismissed: (uid: string) =>
+        updateItem(uid, review.toggleDuplicateDismissed),
+      setMemo: (uid: string, memo: string) =>
+        updateItem(uid, (item) => review.setMemo(item, memo)),
     }),
     [updateItem],
   );
@@ -202,7 +288,7 @@ export function useInbox() {
   }, [data.items]);
 
   const selected = useMemo(
-    () => data.items.find((i) => i.doc_id === data.selectedId) ?? null,
+    () => data.items.find((i) => i.uid === data.selectedId) ?? null,
     [data.items, data.selectedId],
   );
 
@@ -216,6 +302,8 @@ export function useInbox() {
     selectedId: data.selectedId,
     filtered, counts, selected,
     setFilters, setSelectedId, load, reset,
+    pendingFile, confirmPendingFile, cancelPendingFile,
+    lastIntake: data.lastIntake, batchCount: data.batchCount,
     ...actions,
   };
 }

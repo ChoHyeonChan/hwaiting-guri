@@ -41,7 +41,7 @@ export function ChangeLogPanel({ item }: { item: Item }) {
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4">
-      <h3 className="text-sm font-semibold text-slate-800">
+      <h3 className="text-sm font-semibold text-navy">
         변경 이력 <span className="text-slate-400">({item.change_log.length}건)</span>
       </h3>
       <p className="mt-0.5 text-xs text-slate-500">

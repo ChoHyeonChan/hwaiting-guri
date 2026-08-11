@@ -10,9 +10,16 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-[1400px] px-5 py-6">
-      <header className="mb-4">
-        <h1 className="text-lg font-semibold text-slate-900">구매 자료 검토함</h1>
-        <p className="mt-0.5 text-sm text-slate-500">
+      <header className="mb-4 border-b-2 border-navy pb-3">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <h1 className="text-xl font-bold tracking-tight text-navy">
+            ComfoziAI 구매 증빙 인박스
+          </h1>
+          <span className="rounded border border-gold-line bg-gold-soft px-1.5 py-0.5 text-[11px] text-navy">
+            구매 자료 검토함
+          </span>
+        </div>
+        <p className="mt-1 text-sm text-slate-600">
           받은 증빙을 항목별로 정리하고, 확인이 필요한 건을 근거와 함께 표시합니다.
           합치거나 승인하는 판단은 사람이 합니다.
         </p>
@@ -26,8 +33,13 @@ export default function Home() {
           warnings={inbox.warnings}
           total={inbox.counts.total}
           exception={inbox.counts.exception}
+          batchCount={inbox.batchCount}
+          lastIntake={inbox.lastIntake}
+          pendingFile={inbox.pendingFile}
           onLoad={inbox.load}
           onReset={inbox.reset}
+          onConfirmPending={inbox.confirmPendingFile}
+          onCancelPending={inbox.cancelPendingFile}
         />
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_420px]">

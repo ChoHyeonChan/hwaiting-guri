@@ -23,20 +23,20 @@ export function ReviewActions({
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4">
-      <h3 className="text-sm font-semibold text-slate-800">검수</h3>
+      <h3 className="text-sm font-semibold text-navy">검수</h3>
 
       <div className="mt-2 flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => onApprove(item.doc_id)}
+          onClick={() => onApprove(item.uid)}
           disabled={!approvable || item.review_status === 'approved'}
-          className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+          className="rounded-md bg-navy px-3 py-1.5 text-sm font-medium text-white hover:bg-navy-mid disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
         >
           승인
         </button>
         <button
           type="button"
-          onClick={() => onReject(item.doc_id)}
+          onClick={() => onReject(item.uid)}
           disabled={item.review_status === 'rejected'}
           className="rounded-md border border-rose-300 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
         >
@@ -45,7 +45,7 @@ export function ReviewActions({
         {decided && (
           <button
             type="button"
-            onClick={() => onReopen(item.doc_id)}
+            onClick={() => onReopen(item.uid)}
             className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
           >
             재검토
@@ -70,7 +70,7 @@ export function ReviewActions({
               </p>
               <button
                 type="button"
-                onClick={() => onToggleDuplicate(item.doc_id)}
+                onClick={() => onToggleDuplicate(item.uid)}
                 className="mt-2 rounded-md border border-pink-300 bg-white px-2.5 py-1 text-xs text-pink-900 hover:bg-pink-100"
               >
                 다시 중복으로 보기
@@ -83,7 +83,7 @@ export function ReviewActions({
               </p>
               <button
                 type="button"
-                onClick={() => onToggleDuplicate(item.doc_id)}
+                onClick={() => onToggleDuplicate(item.uid)}
                 className="mt-2 rounded-md border border-pink-300 bg-white px-2.5 py-1 text-xs text-pink-900 hover:bg-pink-100"
               >
                 중복 아님으로 되돌리기
@@ -96,12 +96,12 @@ export function ReviewActions({
       <label className="mt-3 block">
         <span className="text-xs text-slate-500">검수 메모</span>
         <textarea
-          key={`${item.doc_id}:memo`}
+          key={`${item.uid}:memo`}
           defaultValue={item.review_memo}
           onBlur={(e) => onMemo(item.doc_id, e.target.value)}
           rows={2}
           placeholder="판단 근거나 공급사에 확인할 내용을 적어 주세요."
-          className="mt-1 w-full resize-y rounded-md border border-slate-300 px-2.5 py-1.5 text-sm outline-none focus:border-slate-500"
+          className="mt-1 w-full resize-y rounded-md border border-slate-300 px-2.5 py-1.5 text-sm outline-none focus:border-navy"
         />
       </label>
 

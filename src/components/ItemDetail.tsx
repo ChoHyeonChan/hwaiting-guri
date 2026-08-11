@@ -47,7 +47,7 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
       {/* 머리말: 상태와 원본 근거 */}
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-sm font-semibold text-slate-900">{item.doc_id}</span>
+          <span className="font-mono text-sm font-semibold text-navy">{item.doc_id}</span>
           <span className={`rounded border px-1.5 py-0.5 text-[11px] ${STATUS_STYLE[item.review_status]}`}>
             {STATUS_LABEL[item.review_status]}
           </span>
@@ -75,7 +75,7 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
       {/* 대기 이유: 사유마다 별도 항목 + 근거가 된 원본 값 */}
       {flags.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-slate-800">
+          <h3 className="text-sm font-semibold text-navy">
             확인이 필요한 이유 <span className="text-slate-400">({flags.length}건)</span>
           </h3>
           <ul className="mt-2 space-y-2">
@@ -112,7 +112,7 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
                       onClick={() => onSelect(item.duplicate_of!)}
                       className="mt-2 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-100"
                     >
-                      기준 항목 {item.duplicate_of} 보기 →
+                      기준 항목 {item.duplicate_of_doc_id} 보기 →
                     </button>
                   )}
                 </li>
@@ -129,14 +129,14 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
             이 항목과 같은 내용으로 의심되는 건이 {item.duplicate_members.length}건 있습니다.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {item.duplicate_members.map((id) => (
+            {item.duplicate_members.map((m) => (
               <button
-                key={id}
+                key={m.uid}
                 type="button"
-                onClick={() => onSelect(id)}
+                onClick={() => onSelect(m.uid)}
                 className="rounded-md border border-pink-300 bg-white px-2.5 py-1 text-xs text-pink-900 hover:bg-pink-100"
               >
-                {id} 보기 →
+                {m.doc_id} 보기 →
               </button>
             ))}
           </div>
@@ -145,7 +145,7 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
 
       {/* 관찰값과 수정값을 분리해서 나란히 */}
       <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <h3 className="text-sm font-semibold text-slate-800">항목 값</h3>
+        <h3 className="text-sm font-semibold text-navy">항목 값</h3>
         <p className="mt-0.5 text-xs text-slate-500">
           관찰값은 파일에서 읽은 원본이며 바뀌지 않습니다. 수정값은 사람이 고칠 수 있는 현재 값입니다.
         </p>
@@ -170,7 +170,7 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
                   </td>
                   <td className="py-1 pl-3">
                     <EditableValue
-                      docId={item.doc_id}
+                      docId={item.uid}
                       field={field}
                       value={after}
                       changed={changed}
@@ -187,7 +187,7 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
               <td className="py-1 pl-3 text-xs">
                 <div className="flex items-center gap-1.5">
                   <EditableValue
-                    docId={item.doc_id}
+                    docId={item.uid}
                     field="normalized_item_name"
                     value={item.current.normalized_item_name}
                     changed={false}
@@ -249,7 +249,7 @@ function EditableValue({
             e.currentTarget.blur();
           }
         }}
-        className={`w-full rounded border border-transparent bg-transparent px-1 py-0.5 font-mono text-xs outline-none hover:border-slate-300 focus:border-slate-500 focus:bg-white ${
+        className={`w-full rounded border border-transparent bg-transparent px-1 py-0.5 font-mono text-xs outline-none hover:border-slate-300 focus:border-navy focus:bg-white ${
           changed ? 'font-semibold text-emerald-700' : 'text-slate-800'
         } ${value === '' ? 'placeholder:text-amber-600' : ''}`}
       />
