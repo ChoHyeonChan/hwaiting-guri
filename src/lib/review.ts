@@ -41,7 +41,7 @@ export function editField(
 }
 
 /**
- * 승인. 필수값이 비어 있으면 승인할 수 없다(요건 명시).
+ * 승인. 필수값이 비어 있거나 형식을 읽지 못한 값이 있으면 승인할 수 없다.
  * 화면에서도 버튼을 막지만, 함수 차원에서도 한 번 더 막는다.
  */
 export function approve(item: Item, at: string): Item {

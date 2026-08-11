@@ -7,6 +7,7 @@ import {
 } from './types';
 import { normalizeItemName } from './normalize';
 import { detectRowExceptions, detectDuplicates } from './detect';
+import { validateFormats } from './validateFormat';
 import type { ParsedRow } from './parseCsv';
 
 /**
@@ -87,6 +88,7 @@ function buildItem(
     duplicate_dismissed: false,
     exception_flags: [],
     exception_reasons: {},
+    format_errors: [],
     review_status: 'new',
     review_memo: '',
     reviewed_at: null,
@@ -97,6 +99,8 @@ function buildItem(
   item.exception_flags = outcome.flags;
   item.exception_reasons = outcome.reasons;
   item.spec_change = outcome.specChange;
+  // 형식 검증은 열 매핑이 끝난 뒤 각 행에 적용한다(회신 2절, 체크리스트 4번)
+  item.format_errors = validateFormats(item.current);
 
   return item;
 }
@@ -109,8 +113,11 @@ function buildItem(
  * 한 항목만 다시 계산할 수 없고 매번 전체를 다시 돌린다.
  *
  * 사람이 남긴 것(review_status, 메모, 변경 이력, 중복 아님 표시)은 보존한다.
+ *
+ * at을 주면 승인이 자동으로 풀린 경우 그 사실을 변경 이력에 남긴다.
+ * 시각을 만들 수 없는 호출부(테스트 등)는 생략할 수 있다.
  */
-export function recomputeItems(items: Item[]): Item[] {
+export function recomputeItems(items: Item[], at?: string): Item[] {
   const next: Item[] = items.map((item) => {
     const outcome = detectRowExceptions(item);
     return {
@@ -118,6 +125,7 @@ export function recomputeItems(items: Item[]): Item[] {
       exception_flags: outcome.flags,
       exception_reasons: outcome.reasons,
       spec_change: outcome.specChange,
+      format_errors: validateFormats(item.current),
       duplicate_of: null,
       duplicate_of_doc_id: null,
       duplicate_members: [],
@@ -125,25 +133,51 @@ export function recomputeItems(items: Item[]): Item[] {
   });
 
   detectDuplicates(next);
-  for (const item of next) item.review_status = decideStatus(item);
+  for (const item of next) {
+    const status = decideStatus(item);
+
+    // 승인이 풀렸으면 이력에 남긴다. 상태만 조용히 바뀌면 담당자가 알 수 없다.
+    if (item.review_status === 'approved' && status !== 'approved') {
+      item.reviewed_at = null;
+      if (at) {
+        item.change_log = [
+          ...item.change_log,
+          { at, field: 'review_status', from: 'approved', to: status, action: 'unapprove' },
+        ];
+      }
+    }
+
+    item.review_status = status;
+  }
   return next;
 }
 
 /**
  * 상태 결정 규칙.
  *
- *   missing_required 있음                      -> needs_review (확인 필요)
+ *   형식 오류 있음 또는 missing_required 있음   -> needs_review (확인 필요)
  *   없고 spec/unit/duplicate 중 하나라도 있음   -> on_hold      (보류 필요)
- *   아무 플래그 없음                            -> new          (승인 가능)
+ *   아무 문제 없음                              -> new          (승인 가능)
  *
+ * 형식 오류를 needs_review로 보내는 것은 회신 2절이 지정한 상태다.
  * 사람이 이미 승인/반려한 항목은 건드리지 않는다.
  * "중복 아님"으로 되돌린 항목은 중복 플래그를 상태 계산에서 제외해
  * 정상 검수 흐름으로 복귀시킨다.
  */
 export function decideStatus(item: Item): ReviewStatus {
-  if (item.review_status === 'approved' || item.review_status === 'rejected') {
+  // 승인한 뒤에 값이나 근거가 바뀌어 승인 조건을 잃으면 승인을 유지할 수 없다.
+  // 그 승인은 바뀌기 전 상태에 대한 판단이었고, 지금은 내보낼 수 없다.
+  // 사람 몰래 풀리지 않도록 recomputeItems가 이력에 남긴다.
+  const approvalLost = item.review_status === 'approved' && !canApprove(item);
+
+  if (!approvalLost && (item.review_status === 'approved' || item.review_status === 'rejected')) {
     return item.review_status;
   }
+
+  // 승인이 풀린 항목도 아래 규칙을 그대로 태운다.
+  // 무조건 needs_review로 보내면, 규격 불일치를 수용했다가 근거를 지운 항목이
+  // "필수값·형식이 잘못됨"을 뜻하는 상태로 잘못 표시된다.
+  if (item.format_errors.length > 0) return 'needs_review';
 
   const active = effectiveFlags(item);
   if (active.includes('missing_required')) return 'needs_review';
@@ -159,9 +193,57 @@ export function effectiveFlags(item: Item) {
 }
 
 /**
- * 승인 가능 여부.
- * 필수값이 비어 있으면 채우기 전까지 승인할 수 없다(요건 명시).
+ * 승인 가능 여부. 막는 경우는 세 가지다.
+ *
+ * 1. 필수값이 비어 있음 — 채우기 전까지 승인 불가(요건 명시)
+ * 2. 값을 정수·날짜로 읽지 못함 — 명세가 형식 오류의 승인 차단까지 지정하지는
+ *    않았지만, 단가를 읽지 못한 채 승인하면 내보내기에서 숫자 필드를 채울 수 없어
+ *    앞단 설계가 받을 수 없는 출력이 나간다. 빈 값과 해석 불가 값은 "쓸 수 없는
+ *    값"이라는 점에서 같아서 같은 취급을 한다.
+ * 3. 예외가 남은 채 승인하려는데 판단 근거가 없음 — 공지 §1이
+ *    "아무 검토 없이 예외 상태를 승인하는 흐름은 허용하지 않습니다",
+ *    "현재 값을 그대로 수용해 승인하면 exception_flags와 승인 사유를 함께
+ *    보존합니다"라고 명시했다. 사유를 보존하려면 사유가 있어야 한다.
+ *
+ * 3번은 예외를 **수용**할 때만 해당한다. 값을 고치거나 "중복 아님"으로
+ * 되돌려 예외를 **해소**했다면 남은 플래그가 없으므로 메모 없이 승인할 수 있다.
  */
 export function canApprove(item: Item): boolean {
-  return !effectiveFlags(item).includes('missing_required');
+  return approvalBlock(item) === null;
+}
+
+export interface ApprovalBlock {
+  /** 항목 머리말 배지용 짧은 문구 */
+  short: string;
+  /** 검수 버튼 아래 안내용. 무엇을 하면 열리는지까지 적는다 */
+  detail: string;
+}
+
+/**
+ * 승인이 막힌 이유. 화면 두 곳이 같은 문구를 쓰도록 여기서 하나로 관리한다.
+ * 막히지 않았으면 null.
+ */
+export function approvalBlock(item: Item): ApprovalBlock | null {
+  if (item.format_errors.length > 0) {
+    return {
+      short: '형식을 고치기 전까지 승인할 수 없습니다',
+      detail: `정수·날짜로 읽지 못한 값이 ${item.format_errors.length}건 있습니다. 위 사유를 보고 값을 고치면 승인할 수 있습니다.`,
+    };
+  }
+
+  const flags = effectiveFlags(item);
+  if (flags.includes('missing_required')) {
+    return {
+      short: '필수값을 채우기 전까지 승인할 수 없습니다',
+      detail: '필수값 누락 상태입니다. 비어 있는 값을 채우면 승인할 수 있습니다.',
+    };
+  }
+  if (flags.length > 0 && item.review_memo.trim() === '') {
+    return {
+      short: '판단 근거를 적어야 승인할 수 있습니다',
+      detail:
+        '예외가 남은 채로 승인하려면 검수 메모에 판단 근거를 적어야 합니다. 값을 고치거나 중복 아님으로 되돌려 예외를 해소한 경우에는 필요 없습니다.',
+    };
+  }
+  return null;
 }

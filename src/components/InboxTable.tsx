@@ -3,7 +3,7 @@
 import type { Filters, LoadState } from '@/lib/store';
 import { effectiveFlags } from '@/lib/pipeline';
 import {
-  FLAG_LABEL, FLAG_ORDER, FLAG_STYLE,
+  FLAG_LABEL, FLAG_ORDER, FLAG_STYLE, FORMAT_ERROR_LABEL, FORMAT_ERROR_STYLE,
   STATUS_LABEL, STATUS_ORDER, STATUS_STYLE,
 } from '@/lib/labels';
 import type { ExceptionFlag, Item, ReviewStatus } from '@/lib/types';
@@ -19,7 +19,8 @@ interface Props {
     byFlag: Record<ExceptionFlag, number>;
   };
   selectedId: string | null;
-  onSelect: (docId: string) => void;
+  /** 인자는 uid다. 문서ID는 재업로드로 중복된다 */
+  onSelect: (uid: string) => void;
 }
 
 export function InboxTable({
@@ -110,8 +111,12 @@ export function InboxTable({
                   <tr
                     key={item.uid}
                     onClick={() => onSelect(item.uid)}
+                    // 선택 행은 배경만으로는 눈에 잘 안 띄어 왼쪽에 Gold 액센트 바를 둔다.
+                    // tr에는 border-left가 안 먹어서 inset 그림자로 그린다.
                     className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50 ${
-                      selected ? 'bg-gold-soft hover:bg-gold-soft' : ''
+                      selected
+                        ? 'bg-gold-soft shadow-[inset_3px_0_0_var(--color-gold)] hover:bg-gold-soft'
+                        : ''
                     }`}
                   >
                     <Td>
@@ -143,10 +148,16 @@ export function InboxTable({
                       </Badge>
                     </Td>
                     <Td>
-                      {flags.length === 0 ? (
+                      {flags.length === 0 && item.format_errors.length === 0 ? (
                         <span className="text-xs text-slate-400">—</span>
                       ) : (
                         <div className="flex flex-wrap gap-1">
+                          {/* 형식 오류를 앞에 둔다. 승인을 막는 이유라 먼저 보여야 한다 */}
+                          {item.format_errors.length > 0 && (
+                            <Badge className={FORMAT_ERROR_STYLE}>
+                              {FORMAT_ERROR_LABEL} {item.format_errors.length}
+                            </Badge>
+                          )}
                           {flags.map((f) => (
                             <Badge key={f} className={FLAG_STYLE[f]}>
                               {FLAG_LABEL[f]}

@@ -99,7 +99,9 @@ export function UploadPanel({
           <p>
             <span className="font-mono text-xs text-slate-500">{fileName}</span>
             {' · '}
-            전체 <b>{total}</b>건 · 확인 필요 <b>{exception}</b>건 · 정상{' '}
+            {/* "확인 필요"는 상태 배지 이름이라 여기서는 쓰지 않는다.
+                이 숫자는 예외나 형식 오류가 하나라도 있는 건 전체를 뜻한다 */}
+            전체 <b>{total}</b>건 · 확인 대상 <b>{exception}</b>건 · 정상{' '}
             <b>{total - exception}</b>건
             {batchCount > 1 && (
               <span className="ml-1 rounded border border-gold-line bg-gold-soft px-1.5 py-0.5 text-[11px] text-navy">

@@ -48,6 +48,13 @@ export const FLAG_STYLE: Record<ExceptionFlag, string> = {
 };
 
 /**
+ * 형식 오류는 예외 4종이 아니라 별도 축이라 배지 색도 4종과 구분한다.
+ * 4종 중 하나로 보이면 "5번째 예외가 생겼다"고 오해할 수 있다.
+ */
+export const FORMAT_ERROR_LABEL = '형식 오류';
+export const FORMAT_ERROR_STYLE = 'bg-red-100 text-red-900 border-red-300';
+
+/**
  * 플래그가 어느 원본 값에서 나왔는지.
  * 창업팀 회신 5-2: "각 사유 옆에 근거가 된 원본 값을 함께 표시해 주세요."
  */

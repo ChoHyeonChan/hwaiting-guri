@@ -35,8 +35,12 @@ interface InboxData {
   lastIntake: { batchNo: number; added: number; duplicates: number } | null;
 }
 
-/** 항목 구조가 바뀌면 버전을 올린다. 예전 백업은 무시하고 빈 상태로 시작한다. */
-const STORAGE_KEY = 'hwaiting-guri.inbox.v2';
+/**
+ * 항목 구조가 바뀌면 버전을 올린다. 예전 백업은 무시하고 빈 상태로 시작한다.
+ * v3에서 format_errors가 추가됐다. v2 백업을 그대로 복원하면 이 필드가 없어
+ * 상태 계산이 깨지므로 키를 바꿔 읽지 않게 한다.
+ */
+const STORAGE_KEY = 'hwaiting-guri.inbox.v3';
 
 /**
  * 같은 파일을 두 번 올렸는지 알아보기 위한 내용 해시.
@@ -116,13 +120,14 @@ export function useInbox() {
   }, []);
 
   // 이전 필터와 선택 항목까지 저장해야 새로고침 후 "복귀 경로" 요건을 만족한다.
+  //
+  // 목록이 비었을 때 백업을 지우지 않는다. 화면이 어떤 이유로든 빈 상태로
+  // 다시 뜨면(렌더 중 오류, 복원 직전의 첫 렌더) 그 순간 백업이 지워져
+  // 검수하던 내용이 통째로 날아가기 때문이다. 삭제는 사람이 "비우기"를
+  // 눌렀을 때 reset이 직접 한다.
   useEffect(() => {
-    if (!restored.current) return;
+    if (!restored.current || data.items.length === 0) return;
     try {
-      if (data.items.length === 0) {
-        window.localStorage.removeItem(STORAGE_KEY);
-        return;
-      }
       const payload: Persisted = {
         items: data.items,
         fileName: data.fileName,
@@ -218,9 +223,15 @@ export function useInbox() {
 
   const cancelPendingFile = useCallback(() => setPendingFile(null), []);
 
+  /** 비우기. 백업 삭제는 사람이 이 버튼을 눌렀을 때만 일어난다. */
   const reset = useCallback(() => {
     setPendingFile(null);
     setData(EMPTY);
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // 백업을 못 지워도 화면 상태는 이미 비워졌다.
+    }
   }, []);
 
   const setFilters = useCallback(
@@ -243,6 +254,7 @@ export function useInbox() {
         ...prev,
         items: recomputeItems(
           prev.items.map((item) => (item.uid === uid ? fn(item, at) : item)),
+          at,
         ),
       }));
     },
@@ -281,7 +293,9 @@ export function useInbox() {
     for (const item of data.items) {
       byStatus[item.review_status] = (byStatus[item.review_status] ?? 0) + 1;
       const flags = effectiveFlags(item);
-      if (flags.length > 0) exception += 1;
+      // 형식 오류만 있는 항목도 사람이 봐야 하는 건이다.
+      // 예외 플래그만 세면 상단 요약과 목록 상태가 어긋난다.
+      if (flags.length > 0 || item.format_errors.length > 0) exception += 1;
       for (const flag of flags) byFlag[flag] = (byFlag[flag] ?? 0) + 1;
     }
     return { byStatus, byFlag, total: data.items.length, exception };

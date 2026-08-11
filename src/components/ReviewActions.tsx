@@ -1,25 +1,24 @@
 'use client';
 
-import { canApprove, effectiveFlags } from '@/lib/pipeline';
-import { FLAG_LABEL } from '@/lib/labels';
+import { approvalBlock } from '@/lib/pipeline';
 import type { Item } from '@/lib/types';
 
+/** 인자는 전부 uid다. 문서ID는 재업로드로 중복돼 항목을 특정하지 못한다. */
 interface Props {
   item: Item;
-  onApprove: (docId: string) => void;
-  onReject: (docId: string) => void;
-  onReopen: (docId: string) => void;
-  onToggleDuplicate: (docId: string) => void;
-  onMemo: (docId: string, memo: string) => void;
+  onApprove: (uid: string) => void;
+  onReject: (uid: string) => void;
+  onReopen: (uid: string) => void;
+  onToggleDuplicate: (uid: string) => void;
+  onMemo: (uid: string, memo: string) => void;
 }
 
 export function ReviewActions({
   item, onApprove, onReject, onReopen, onToggleDuplicate, onMemo,
 }: Props) {
   const decided = item.review_status === 'approved' || item.review_status === 'rejected';
-  const approvable = canApprove(item);
+  const block = approvalBlock(item);
   const isDuplicate = item.duplicate_of !== null;
-  const blocking = effectiveFlags(item).filter((f) => f === 'missing_required');
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4">
@@ -29,7 +28,7 @@ export function ReviewActions({
         <button
           type="button"
           onClick={() => onApprove(item.uid)}
-          disabled={!approvable || item.review_status === 'approved'}
+          disabled={block !== null || item.review_status === 'approved'}
           className="rounded-md bg-navy px-3 py-1.5 text-sm font-medium text-white hover:bg-navy-mid disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
         >
           승인
@@ -53,10 +52,10 @@ export function ReviewActions({
         )}
       </div>
 
-      {/* 승인이 막힌 이유를 버튼 옆에 그대로 적는다 */}
-      {!approvable && (
+      {/* 승인이 막힌 이유를 버튼 아래에 그대로 적는다 */}
+      {block && (
         <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
-          {blocking.map((f) => FLAG_LABEL[f]).join(', ')} 상태입니다. 비어 있는 값을 채우면 승인할 수 있습니다.
+          {block.detail}
         </p>
       )}
 
@@ -98,7 +97,7 @@ export function ReviewActions({
         <textarea
           key={`${item.uid}:memo`}
           defaultValue={item.review_memo}
-          onBlur={(e) => onMemo(item.doc_id, e.target.value)}
+          onBlur={(e) => onMemo(item.uid, e.target.value)}
           rows={2}
           placeholder="판단 근거나 공급사에 확인할 내용을 적어 주세요."
           className="mt-1 w-full resize-y rounded-md border border-slate-300 px-2.5 py-1.5 text-sm outline-none focus:border-navy"

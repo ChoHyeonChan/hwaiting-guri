@@ -15,7 +15,7 @@ export default function Home() {
           <h1 className="text-xl font-bold tracking-tight text-navy">
             ComfoziAI 구매 증빙 인박스
           </h1>
-          <span className="rounded border border-gold-line bg-gold-soft px-1.5 py-0.5 text-[11px] text-navy">
+          <span className="rounded border border-gold bg-gold-soft px-1.5 py-0.5 text-[11px] text-navy">
             구매 자료 검토함
           </span>
         </div>

@@ -1,9 +1,9 @@
 'use client';
 
-import { effectiveFlags, canApprove } from '@/lib/pipeline';
+import { effectiveFlags, approvalBlock } from '@/lib/pipeline';
 import {
-  FIELD_LABEL, FLAG_LABEL, FLAG_STYLE, NORMALIZATION_SOURCE_LABEL,
-  STATUS_LABEL, STATUS_STYLE, flagEvidence,
+  FIELD_LABEL, FLAG_LABEL, FLAG_STYLE, FORMAT_ERROR_LABEL, FORMAT_ERROR_STYLE,
+  NORMALIZATION_SOURCE_LABEL, STATUS_LABEL, STATUS_STYLE, flagEvidence,
 } from '@/lib/labels';
 import { INSUFFICIENT_LABEL } from '@/lib/normalize';
 import { ReviewActions } from './ReviewActions';
@@ -15,18 +15,25 @@ const OBSERVED_FIELDS: (keyof ItemFields)[] = [
   'price_before', 'price_after', 'effective_date',
 ];
 
+/**
+ * 검수 동작 핸들러.
+ *
+ * 인자는 전부 **uid**다. 문서ID는 재업로드로 중복되므로 항목을 특정하지 못한다.
+ * 예전에 파라미터 이름이 docId였을 때 검수 메모가 doc_id를 넘겨 저장되지 않는
+ * 버그가 있었다. 이름을 uid로 못박아 같은 실수를 막는다.
+ */
 export interface ReviewHandlers {
-  editField: (docId: string, field: keyof CurrentFields, value: string) => void;
-  approve: (docId: string) => void;
-  reject: (docId: string) => void;
-  reopen: (docId: string) => void;
-  toggleDuplicateDismissed: (docId: string) => void;
-  setMemo: (docId: string, memo: string) => void;
+  editField: (uid: string, field: keyof CurrentFields, value: string) => void;
+  approve: (uid: string) => void;
+  reject: (uid: string) => void;
+  reopen: (uid: string) => void;
+  toggleDuplicateDismissed: (uid: string) => void;
+  setMemo: (uid: string, memo: string) => void;
 }
 
 interface Props {
   item: Item | null;
-  onSelect: (docId: string) => void;
+  onSelect: (uid: string) => void;
   actions: ReviewHandlers;
 }
 
@@ -40,7 +47,7 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
   }
 
   const flags = effectiveFlags(item);
-  const approvable = canApprove(item);
+  const block = approvalBlock(item);
 
   return (
     <section className="space-y-3">
@@ -51,9 +58,9 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
           <span className={`rounded border px-1.5 py-0.5 text-[11px] ${STATUS_STYLE[item.review_status]}`}>
             {STATUS_LABEL[item.review_status]}
           </span>
-          {!approvable && (
+          {block && (
             <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-900">
-              필수값을 채우기 전까지 승인할 수 없습니다
+              {block.short}
             </span>
           )}
         </div>
@@ -71,6 +78,35 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
           )}
         </p>
       </div>
+
+      {/* 형식 오류: 값은 있는데 정수·날짜로 읽지 못한 경우. 예외 4종과 분리해서 보여준다 */}
+      {item.format_errors.length > 0 && (
+        <div className="rounded-lg border border-red-200 bg-white p-4">
+          <h3 className="text-sm font-semibold text-red-900">
+            형식을 고쳐야 합니다{' '}
+            <span className="text-red-400">({item.format_errors.length}건)</span>
+          </h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            값은 들어 있으나 정수·날짜로 읽지 못했습니다. 읽기를 중단하지 않고 사유만 남깁니다.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {item.format_errors.map((error) => (
+              <li key={error.field} className="rounded-md border border-red-200 bg-red-50 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded border px-1.5 py-0.5 text-[11px] ${FORMAT_ERROR_STYLE}`}>
+                    {FORMAT_ERROR_LABEL}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {FIELD_LABEL[error.field]}{' '}
+                    <span className="font-mono text-slate-700">{error.value}</span>
+                  </span>
+                </div>
+                <p className="mt-1.5 text-sm text-slate-700">{error.reason}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* 대기 이유: 사유마다 별도 항목 + 근거가 된 원본 값 */}
       {flags.length > 0 && (
@@ -170,7 +206,7 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
                   </td>
                   <td className="py-1 pl-3">
                     <EditableValue
-                      docId={item.uid}
+                      uid={item.uid}
                       field={field}
                       value={after}
                       changed={changed}
@@ -187,7 +223,7 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
               <td className="py-1 pl-3 text-xs">
                 <div className="flex items-center gap-1.5">
                   <EditableValue
-                    docId={item.uid}
+                    uid={item.uid}
                     field="normalized_item_name"
                     value={item.current.normalized_item_name}
                     changed={false}
@@ -226,22 +262,22 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
  * 커밋은 포커스가 빠질 때, 엔터를 누르면 포커스를 빼서 같은 경로를 탄다.
  */
 function EditableValue({
-  docId, field, value, changed, placeholder, onCommit,
+  uid, field, value, changed, placeholder, onCommit,
 }: {
-  docId: string;
+  uid: string;
   field: keyof CurrentFields;
   value: string;
   changed: boolean;
   placeholder?: string;
-  onCommit: (docId: string, field: keyof CurrentFields, value: string) => void;
+  onCommit: (uid: string, field: keyof CurrentFields, value: string) => void;
 }) {
   return (
     <div className="flex w-full items-center gap-1">
       <input
-        key={`${docId}:${field}:${value}`}
+        key={`${uid}:${field}:${value}`}
         defaultValue={value}
         placeholder={placeholder}
-        onBlur={(e) => onCommit(docId, field, e.target.value.trim())}
+        onBlur={(e) => onCommit(uid, field, e.target.value.trim())}
         onKeyDown={(e) => {
           if (e.key === 'Enter') e.currentTarget.blur();
           if (e.key === 'Escape') {

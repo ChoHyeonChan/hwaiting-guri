@@ -10,6 +10,7 @@ const ACTION_LABEL: Record<ChangeLogEntry['action'], string> = {
   reject: '반려',
   reopen: '재검토',
   dismiss_duplicate: '중복 판단 변경',
+  unapprove: '승인 해제',
 };
 
 const ACTION_STYLE: Record<ChangeLogEntry['action'], string> = {
@@ -18,6 +19,7 @@ const ACTION_STYLE: Record<ChangeLogEntry['action'], string> = {
   reject: 'bg-rose-100 text-rose-900 border-rose-300',
   reopen: 'bg-slate-100 text-slate-700 border-slate-300',
   dismiss_duplicate: 'bg-pink-100 text-pink-900 border-pink-300',
+  unapprove: 'bg-amber-100 text-amber-900 border-amber-300',
 };
 
 /** 데이터 필드가 아닌 항목(상태·중복 판단)의 한글 이름 */
@@ -46,6 +48,7 @@ export function ChangeLogPanel({ item }: { item: Item }) {
       </h3>
       <p className="mt-0.5 text-xs text-slate-500">
         이 세션에서 사람이 값을 고치거나 승인·반려한 내역입니다.
+        승인한 뒤 값이 바뀌어 승인이 풀린 경우도 여기에 남습니다.
       </p>
 
       {entries.length === 0 ? (

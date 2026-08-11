@@ -13,8 +13,22 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseEvidenceCsv, type ParsedRow } from '../src/lib/parseCsv';
-import { buildItems } from '../src/lib/pipeline';
+import { buildItems, canApprove, recomputeItems } from '../src/lib/pipeline';
+import {
+  approve as reviewApprove,
+  editField as reviewEdit,
+  setMemo as reviewSetMemo,
+  toggleDuplicateDismissed as reviewDismiss,
+} from '../src/lib/review';
 import type { ExceptionFlag, ReviewStatus } from '../src/lib/types';
+
+/** 명세가 정한 예외 4종. 형식 검증이 여기에 5번째를 끼워넣지 않았는지 확인하는 데 쓴다. */
+const FLAG_SET = new Set<ExceptionFlag>([
+  'missing_required',
+  'spec_mismatch',
+  'unit_mismatch',
+  'duplicate_suspected',
+]);
 
 const CSV_NAME = '42_해커톤_업로드용_증빙20건_2026-08-04.csv';
 const CSV_PATH = resolve(
@@ -266,6 +280,235 @@ const uidOk = uids.size === 40;
 if (!uidOk) failures += 1;
 console.log(`  총 ${twice.length}건 · 고유 uid ${uids.size}개  ${uidOk ? 'PASS' : 'FAIL'}`);
 console.log('    -> 문서ID가 겹쳐도 내부 식별자는 유일하다.');
+
+// ------------------------------------------------- 5차: 값 형식 검증
+console.log('');
+console.log('='.repeat(72));
+console.log('5. 값 형식 검증 (창업팀 회신 2절 · 체크리스트 4번)');
+console.log('='.repeat(72));
+console.log('제공 20건은 전부 정상값이라 형식 오류가 드러나지 않는다.');
+console.log('깨진 값을 일부러 넣은 자체 제작 파일로 검사한다.');
+console.log('');
+
+interface FormatExpectation {
+  /** 형식 오류가 난 필드들 */
+  fields: string[];
+  status: ReviewStatus;
+  /** 승인 버튼이 열려 있어야 하는가 */
+  approvable: boolean;
+  note: string;
+}
+
+const FORMAT_EXPECTED: Record<string, FormatExpectation> = {
+  'FMT-001': { fields: ['price_before'], status: 'needs_review', approvable: false, note: '기존단가가 한글' },
+  'FMT-002': { fields: ['price_after'], status: 'needs_review', approvable: false, note: '변경단가에 단위 문자' },
+  'FMT-003': { fields: ['effective_date'], status: 'needs_review', approvable: false, note: '월·일 범위 초과' },
+  'FMT-004': { fields: ['effective_date'], status: 'needs_review', approvable: false, note: '달력에 없는 날(2026-02-30)' },
+  'FMT-005': { fields: ['effective_date'], status: 'needs_review', approvable: false, note: '구분자가 슬래시' },
+  'FMT-006': {
+    fields: ['price_before', 'price_after', 'effective_date'],
+    status: 'needs_review', approvable: false, note: '세 필드 동시 실패 - 첫 실패에서 멈추지 않는다',
+  },
+  'FMT-007': { fields: [], status: 'new', approvable: true, note: '천단위 콤마는 정상으로 읽는다' },
+  'FMT-008': { fields: [], status: 'needs_review', approvable: false, note: '공란은 필수값 누락만 - 형식 오류로 중복 표시하지 않는다' },
+  'FMT-009': { fields: ['price_before'], status: 'needs_review', approvable: false, note: '원 단위라 소수점을 받지 않는다' },
+  'FMT-010': { fields: [], status: 'new', approvable: true, note: '전부 정상' },
+};
+
+const formatPath = resolve(import.meta.dirname, '../docs/형식오류_테스트.csv');
+const formatItems = buildItems(
+  parseEvidenceCsv(readFileSync(formatPath, 'utf8')).rows,
+  '형식오류_테스트.csv',
+);
+
+console.log(
+  ['문서ID', '형식 오류 필드', '상태', '승인', '판정'].map((h, i) =>
+    h.padEnd([9, 42, 14, 6, 6][i]),
+  ).join(''),
+);
+console.log('-'.repeat(72));
+
+for (const item of formatItems) {
+  const expected = FORMAT_EXPECTED[item.doc_id];
+  const actualFields = item.format_errors.map((e) => e.field);
+  const approvable = canApprove(item);
+
+  // 세 검사를 각각 변수에 담는다. &&로 이으면 첫 실패에서 단축돼 나머지가 집계되지 않는다.
+  const fieldsOk = check('fields', sorted(actualFields), sorted(expected.fields));
+  const statusOk = check('status', item.review_status, expected.status);
+  const approvableOk = check('approvable', String(approvable), String(expected.approvable));
+  const ok = fieldsOk && statusOk && approvableOk;
+
+  console.log(
+    [
+      item.doc_id.padEnd(9),
+      (actualFields.join(', ') || '(없음)').padEnd(42),
+      item.review_status.padEnd(14),
+      (approvable ? '가능' : '차단').padEnd(6),
+      ok ? 'PASS' : 'FAIL',
+    ].join(''),
+  );
+  if (!ok) {
+    console.log(`   기대: ${sorted(expected.fields)} / ${expected.status} / ${expected.approvable ? '가능' : '차단'}`);
+  }
+}
+
+console.log('');
+console.log('실패 이유 문구 (담당자가 읽는 문장):');
+for (const item of formatItems) {
+  for (const error of item.format_errors) {
+    console.log(`  ${item.doc_id}  ${error.reason}`);
+  }
+}
+
+// 형식 오류가 예외 4종을 건드리지 않았는지 확인한다.
+// 5번째 플래그를 추가했다면 20건 정답 대조가 흔들린다.
+const flagPollution = formatItems.filter(
+  (i) => i.format_errors.length > 0 && i.exception_flags.some((f) => !FLAG_SET.has(f)),
+).length;
+if (flagPollution > 0) failures += flagPollution;
+console.log('');
+console.log(
+  `  예외 4종 밖의 플래그가 생겼는가: ${flagPollution === 0 ? '없음 PASS' : `${flagPollution}건 FAIL`}`,
+);
+console.log('    -> 형식 오류는 exception_flags를 건드리지 않는 별도 축이다.');
+
+// 값을 고치면 풀리는지. 형식 오류는 담당자가 해소할 수 있어야 한다.
+const broken = formatItems.find((i) => i.doc_id === 'FMT-001')!;
+const fixed = recomputeItems(
+  formatItems.map((i) =>
+    i.uid === broken.uid ? { ...i, current: { ...i.current, price_before: '32000' } } : i,
+  ),
+).find((i) => i.doc_id === 'FMT-001')!;
+const fixOk = fixed.format_errors.length === 0 && fixed.review_status === 'new' && canApprove(fixed);
+if (!fixOk) failures += 1;
+console.log('');
+console.log(
+  `  FMT-001 기존단가를 32000으로 고침 -> 오류 ${fixed.format_errors.length}건 / ${fixed.review_status} / ${canApprove(fixed) ? '승인 가능' : '승인 차단'}  ${fixOk ? 'PASS' : 'FAIL'}`,
+);
+console.log('    -> 형식 오류는 값을 고치면 풀린다. 영구 차단이 아니다.');
+
+// ------------------------------------- 6차: 승인 뒤 값이 깨지는 경우
+console.log('');
+console.log('='.repeat(72));
+console.log('6. 승인한 뒤에 값이 깨지면');
+console.log('='.repeat(72));
+console.log('승인은 그때의 값에 대한 판단이므로, 값이 바뀌어 승인 조건을 잃으면');
+console.log('승인을 유지할 수 없다. 유지되면 깨진 값이 출력으로 나간다.');
+console.log('');
+
+const AT = '2026-08-12T00:00:00.000Z';
+
+/** 승인한 항목 하나의 필드를 바꾸고 전체를 다시 판정한다 */
+function approveThenEdit(field: 'price_before' | 'effective_date', value: string) {
+  const base = buildItems(parsed.rows, CSV_NAME);
+  const target = base.find((i) => i.doc_id === 'DOC-001')!;
+  const approved = recomputeItems(
+    base.map((i) => (i.uid === target.uid ? reviewApprove(i, AT) : i)),
+    AT,
+  );
+  const edited = recomputeItems(
+    approved.map((i) => (i.uid === target.uid ? reviewEdit(i, field, value, AT) : i)),
+    AT,
+  );
+  return {
+    approved: approved.find((i) => i.doc_id === 'DOC-001')!,
+    edited: edited.find((i) => i.doc_id === 'DOC-001')!,
+  };
+}
+
+for (const scenario of [
+  { label: '단가를 정수로 못 읽는 값으로', field: 'price_before' as const, value: '삼만원' },
+  { label: '필수값인 적용일을 비움', field: 'effective_date' as const, value: '' },
+]) {
+  const { approved, edited } = approveThenEdit(scenario.field, scenario.value);
+  const logged = edited.change_log.at(-1)?.action === 'unapprove';
+  const ok =
+    approved.review_status === 'approved' &&
+    edited.review_status === 'needs_review' &&
+    !canApprove(edited) &&
+    edited.reviewed_at === null &&
+    logged;
+  if (!ok) failures += 1;
+
+  console.log(`  ${scenario.label}`);
+  console.log(
+    `    승인 -> ${edited.review_status} · 승인 ${canApprove(edited) ? '가능' : '차단'} · 이력 ${logged ? 'unapprove 남음' : '없음'}  ${ok ? 'PASS' : 'FAIL'}`,
+  );
+}
+
+// 값을 되돌려도 시스템이 알아서 다시 승인하지는 않아야 한다.
+const base = buildItems(parsed.rows, CSV_NAME);
+const t = base.find((i) => i.doc_id === 'DOC-001')!;
+const cycled = recomputeItems(
+  recomputeItems(
+    recomputeItems(base.map((i) => (i.uid === t.uid ? reviewApprove(i, AT) : i)), AT)
+      .map((i) => (i.uid === t.uid ? reviewEdit(i, 'price_before', '삼만원', AT) : i)),
+    AT,
+  ).map((i) => (i.uid === t.uid ? reviewEdit(i, 'price_before', '32000', AT) : i)),
+  AT,
+).find((i) => i.doc_id === 'DOC-001')!;
+
+const noAutoApprove = cycled.review_status === 'new' && canApprove(cycled);
+if (!noAutoApprove) failures += 1;
+console.log('');
+console.log(
+  `  값을 정상으로 되돌림 -> ${cycled.review_status}  ${noAutoApprove ? 'PASS' : 'FAIL'}`,
+);
+console.log('    -> 자동으로 다시 승인하지 않는다. 승인은 사람이 다시 누른다.');
+
+// --------------------------------- 7차: 예외 수용 승인에는 근거가 필요하다
+console.log('');
+console.log('='.repeat(72));
+console.log('7. 예외를 수용해 승인할 때 판단 근거 요구 (전체팀 공지 2026-08-09 §1)');
+console.log('='.repeat(72));
+console.log('공지: "아무 검토 없이 예외 상태를 승인하는 흐름은 허용하지 않습니다."');
+console.log('      "현재 값을 그대로 수용해 승인하면 exception_flags와 승인 사유를 함께 보존합니다."');
+console.log('');
+
+const memoBase = buildItems(parsed.rows, CSV_NAME);
+const withMemo = (docId: string, memo: string) =>
+  recomputeItems(
+    memoBase.map((i) => (i.doc_id === docId ? reviewSetMemo(i, memo) : i)),
+    AT,
+  ).find((i) => i.doc_id === docId)!;
+
+for (const c of [
+  { docId: 'DOC-019', memo: '', can: false, note: '예외 있음 · 메모 없음 -> 차단' },
+  { docId: 'DOC-019', memo: '공급사 확인 후 규격 변경 수용', can: true, note: '예외 있음 · 메모 있음 -> 승인 가능' },
+  { docId: 'DOC-001', memo: '', can: true, note: '예외 없음 · 메모 없음 -> 승인 가능(근거 요구 안 함)' },
+]) {
+  const item = withMemo(c.docId, c.memo);
+  const ok = check('memoGate', String(canApprove(item)), String(c.can));
+  console.log(`  ${c.note.padEnd(46)} ${ok ? 'PASS' : `FAIL (실제 ${canApprove(item)})`}`);
+}
+
+// 해소한 경우에는 근거를 요구하지 않아야 한다.
+// DOC-018은 중복 의심인데, "중복 아님"으로 되돌리면 남은 예외가 없다.
+const dismissed = recomputeItems(
+  memoBase.map((i) => (i.doc_id === 'DOC-018' ? reviewDismiss(i, AT) : i)),
+  AT,
+).find((i) => i.doc_id === 'DOC-018')!;
+const dismissOk = check('dismissGate', String(canApprove(dismissed)), 'true');
+console.log(
+  `  ${'중복 아님으로 해소 · 메모 없음 -> 승인 가능'.padEnd(46)} ${dismissOk ? 'PASS' : 'FAIL'}`,
+);
+console.log('    -> 근거를 요구하는 것은 예외를 "수용"할 때뿐이다. "해소"에는 요구하지 않는다.');
+
+// 승인 후 메모를 지우면 승인이 풀리는지. 근거가 사라지면 승인도 유지될 수 없다.
+const approvedWithMemo = recomputeItems(
+  memoBase.map((i) => (i.doc_id === 'DOC-019' ? reviewApprove(reviewSetMemo(i, '수용 사유'), AT) : i)),
+  AT,
+);
+const memoErased = recomputeItems(
+  approvedWithMemo.map((i) => (i.doc_id === 'DOC-019' ? reviewSetMemo(i, '') : i)),
+  AT,
+).find((i) => i.doc_id === 'DOC-019')!;
+const eraseOk = check('memoErase', memoErased.review_status, 'on_hold');
+console.log('');
+console.log(
+  `  승인 후 메모를 지움 -> ${memoErased.review_status} (근거가 사라지면 승인도 풀린다)  ${eraseOk ? 'PASS' : 'FAIL'}`,
+);
 
 // ---------------------------------------------------------------- 결과
 console.log('');

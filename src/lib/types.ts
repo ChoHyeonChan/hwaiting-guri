@@ -69,6 +69,28 @@ export type ExceptionFlag =
 /** 정규화 후보를 어디서 얻었는지. insufficient면 화면에 "데이터 부족"으로 표시한다. */
 export type NormalizationSource = 'dictionary' | 'rule' | 'insufficient';
 
+/**
+ * 형식을 검사하는 필드. 나머지 5개는 자유 텍스트라 검사 대상이 아니다.
+ * 단위는 별도로 unit_mismatch가 표준 집합 대조를 맡는다.
+ */
+export type FormatCheckedField = 'price_before' | 'price_after' | 'effective_date';
+
+/**
+ * 형식 검증에 실패한 필드 하나.
+ *
+ * 예외 4종(exception_flags)과 **별도 축**으로 둔다. 창업팀 공지가
+ * "예외 4종 탐지 규칙과 제공 20건 정답을 변경하지 않습니다"라고 명시했으므로
+ * 5번째 플래그를 만들면 20건 정답 대조가 흔들린다.
+ * 상태에는 영향을 주되(확인 필요), 플래그 집합은 건드리지 않는다.
+ */
+export interface FormatError {
+  field: FormatCheckedField;
+  /** 검사 대상이 된 실제 값. 화면에 근거로 함께 보여준다 */
+  value: string;
+  /** 사람이 읽을 실패 이유 */
+  reason: string;
+}
+
 export interface SourceRef {
   input_method: 'file' | 'manual';
   /** 수기 입력이면 null */
@@ -84,7 +106,11 @@ export interface ChangeLogEntry {
   field: string;
   from: string;
   to: string;
-  action: 'edit' | 'approve' | 'reject' | 'reopen' | 'dismiss_duplicate';
+  /**
+   * unapprove만 사람이 누른 것이 아니라 값 변경의 결과로 시스템이 남긴다.
+   * 승인 뒤 값이 깨져 승인 조건을 잃었을 때다.
+   */
+  action: 'edit' | 'approve' | 'reject' | 'reopen' | 'dismiss_duplicate' | 'unapprove';
 }
 
 export interface Item {
@@ -126,6 +152,12 @@ export interface Item {
   exception_flags: ExceptionFlag[];
   /** 플래그별 사람이 읽을 탐지 사유 */
   exception_reasons: Partial<Record<ExceptionFlag, string>>;
+
+  /**
+   * 값은 있는데 정수·날짜로 해석되지 않은 필드들.
+   * 비어 있으면 형식 문제가 없다는 뜻이다.
+   */
+  format_errors: FormatError[];
 
   review_status: ReviewStatus;
   review_memo: string;
