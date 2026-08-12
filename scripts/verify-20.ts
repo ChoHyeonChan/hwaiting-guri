@@ -525,6 +525,66 @@ console.log(
   `  승인 후 메모를 지움 -> ${memoErased.review_status} (근거가 사라지면 승인도 풀린다)  ${eraseOk ? 'PASS' : 'FAIL'}`,
 );
 
+// ------------------------------------ 8차: 표준 단위 밖의 단일 단위
+console.log('');
+console.log('='.repeat(72));
+console.log('8. 표준 단위 밖의 단일 단위 (2026-08-12 샘플 공문에서 확인)');
+console.log('='.repeat(72));
+console.log('제공 20건의 단위는 PK·BOX·PO와 복수 병기(KG/단)뿐이라,');
+console.log('"표준 집합 밖의 단일 단위" 분기는 20건으로 실행되지 않았다.');
+console.log('창업팀 샘플 공문에 봉·망·말·팩·캔·박스가 나와 이 경로를 따로 검사한다.');
+console.log('');
+
+interface UnitExpectation {
+  flags: ExceptionFlag[];
+  note: string;
+}
+
+const UNIT_EXPECTED: Record<string, UnitExpectation> = {
+  'UNIT-001': { flags: ['unit_mismatch'], note: '봉' },
+  'UNIT-002': { flags: ['unit_mismatch'], note: '망' },
+  'UNIT-003': { flags: ['unit_mismatch'], note: '말' },
+  'UNIT-004': { flags: ['unit_mismatch'], note: '팩' },
+  'UNIT-005': { flags: ['unit_mismatch'], note: '캔' },
+  'UNIT-006': { flags: ['unit_mismatch'], note: '박스 - BOX의 한글 표기여도 표준 집합 밖이다' },
+  'UNIT-007': { flags: [], note: 'BOX - 대조군, 정상 통과해야 한다' },
+  'UNIT-008': { flags: ['unit_mismatch'], note: 'pk - 소문자는 보정하지 않는다' },
+  'UNIT-009': { flags: [], note: '" PK " - 파서가 셀을 읽을 때 앞뒤 공백을 다듬는다' },
+  'UNIT-010': { flags: ['unit_mismatch'], note: 'EA/BOX - 복수 병기 경로' },
+};
+
+const unitItems = buildItems(
+  parseEvidenceCsv(
+    readFileSync(resolve(import.meta.dirname, '../docs/단위검증_테스트.csv'), 'utf8'),
+  ).rows,
+  '단위검증_테스트.csv',
+);
+
+console.log(
+  ['문서ID', '단위', '탐지 플래그', '판정'].map((h, i) => pad(h, [10, 10, 20, 6][i])).join('') +
+    '비고',
+);
+console.log('-'.repeat(72));
+
+for (const item of unitItems) {
+  const expected = UNIT_EXPECTED[item.doc_id];
+  const ok = check('unit', sorted(item.exception_flags), sorted(expected.flags));
+  console.log(
+    pad(item.doc_id, 10) +
+      pad(`"${item.observed.unit}"`, 10) +
+      pad(sorted(item.exception_flags), 20) +
+      pad(ok ? 'PASS' : 'FAIL', 6) +
+      expected.note,
+  );
+}
+
+// 자동 환산은 하지 않는다. 봉이 몇 PK인지는 공급사만 아는 정보다.
+const converted = unitItems.filter((i) => i.current.unit !== i.observed.unit).length;
+if (converted > 0) failures += converted;
+console.log('');
+console.log(`  단위를 임의로 바꾼 항목: ${converted}건  ${converted === 0 ? 'PASS' : 'FAIL'}`);
+console.log('    -> 표준 단위로 자동 환산하지 않는다. 관찰값을 그대로 두고 사람이 판단한다.');
+
 // ---------------------------------------------------------------- 결과
 console.log('');
 console.log('='.repeat(72));
