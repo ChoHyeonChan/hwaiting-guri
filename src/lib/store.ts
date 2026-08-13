@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseEvidenceCsv, CsvParseError } from './parseCsv';
-import { buildItems, effectiveFlags, recomputeItems } from './pipeline';
+import { addManualItem, buildItems, effectiveFlags, recomputeItems } from './pipeline';
 import * as review from './review';
 import type { CurrentFields, ExceptionFlag, Item, ReviewStatus } from './types';
 
@@ -214,6 +214,32 @@ export function useInbox() {
     [commit],
   );
 
+  /**
+   * 화면에서 직접 등록한다. 파일 인입과 같은 파이프라인을 탄다.
+   * 인입 횟수(batchCount)도 함께 올려, 기존 항목과 다른 배치로 구분되게 한다.
+   */
+  const addManual = useCallback((values: Record<string, string>) => {
+    setData((prev) => {
+      const batchNo = prev.batchCount + 1;
+      const items = addManualItem(values, prev.items, batchNo);
+      const added = items[items.length - 1];
+      return {
+        ...prev,
+        items,
+        // 파일에서 온 게 아니므로 파일명 표시는 건드리지 않는다.
+        selectedId: added.uid,
+        loadState: 'success',
+        errorMessage: '',
+        batchCount: batchNo,
+        lastIntake: {
+          batchNo,
+          added: 1,
+          duplicates: added.exception_flags.includes('duplicate_suspected') ? 1 : 0,
+        },
+      };
+    });
+  }, []);
+
   /** 같은 파일 확인 안내에서 계속 진행을 고른 경우 */
   const confirmPendingFile = useCallback(() => {
     if (!pendingFile) return;
@@ -315,7 +341,7 @@ export function useInbox() {
     filters: data.filters,
     selectedId: data.selectedId,
     filtered, counts, selected,
-    setFilters, setSelectedId, load, reset,
+    setFilters, setSelectedId, load, reset, addManual,
     pendingFile, confirmPendingFile, cancelPendingFile,
     lastIntake: data.lastIntake, batchCount: data.batchCount,
     ...actions,

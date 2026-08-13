@@ -13,7 +13,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseEvidenceCsv, type ParsedRow } from '../src/lib/parseCsv';
-import { buildItems, canApprove, recomputeItems } from '../src/lib/pipeline';
+import { addManualItem, buildItems, canApprove, recomputeItems } from '../src/lib/pipeline';
 import {
   approve as reviewApprove,
   editField as reviewEdit,
@@ -740,6 +740,103 @@ const escOk = check('csvEscape', restoredMemo === nastyMemo ? 'same' : 'diff', '
 console.log('');
 console.log(`  메모에 따옴표·쉼표·줄바꿈을 넣고 CSV 왕복 -> ${escOk ? '원문 그대로 PASS' : 'FAIL'}`);
 console.log('    -> RFC 4180대로 감싸고 이스케이프한다.');
+
+// ------------------------------------------------------ 10차: 수기 등록
+console.log('');
+console.log('='.repeat(72));
+console.log('10. 화면에서 직접 등록 (요건 ② "XLSX/CSV 중 1개 + 수기 등록")');
+console.log('='.repeat(72));
+console.log('수기 등록을 별도 경로로 두면 "직접 넣은 건 중복 검사가 안 된다"는 구멍이 생긴다.');
+console.log('파일 인입과 같은 파이프라인을 타는지 확인한다.');
+console.log('');
+
+const manualBase = buildItems(parsed.rows, CSV_NAME);
+
+/** 20건 위에 수기 항목 하나를 얹고 방금 등록한 항목을 돌려준다 */
+function addManual(values: Record<string, string>) {
+  const next = addManualItem(values, manualBase, 2);
+  return { items: next, added: next[next.length - 1] };
+}
+
+const NORMAL = {
+  '문서ID': 'MAN-001', '원본유형': '수기', '공급사': '가온푸드(예시)',
+  '원문 품목명': '토마토살사S/O', '규격': '5kg/PK', '단위': 'PK',
+  '기존단가(원)': '40000', '변경단가(원)': '42000', '적용일': '2026-08-25',
+};
+
+const normal = addManual(NORMAL);
+const srcOk =
+  check('manualMethod', normal.added.source_ref.input_method, 'manual') &&
+  check('manualFile', String(normal.added.source_ref.file_name), 'null') &&
+  check('manualRow', String(normal.added.source_ref.row_no), 'null');
+console.log(
+  `  출처 기록: input_method=${normal.added.source_ref.input_method} file_name=${normal.added.source_ref.file_name} row_no=${normal.added.source_ref.row_no}  ${srcOk ? 'PASS' : 'FAIL'}`,
+);
+console.log('    -> 파일의 한 행이 아니므로 파일명·행 번호를 남기지 않는다. 이것 자체가 근거다.');
+
+const normOk = check('manualNorm', normal.added.normalization.source, 'dictionary');
+console.log(`  정규화: "${normal.added.current.normalized_item_name}" (${normal.added.normalization.source})  ${normOk ? 'PASS' : 'FAIL'}`);
+console.log('    -> 사전 조회가 그대로 돈다.');
+
+// 필수값 누락과 형식 오류가 파일 인입과 똑같이 잡히는가
+const manualBroken = addManual({ ...NORMAL, '문서ID': 'MAN-002', '적용일': '', '변경단가(원)': '추후 안내' });
+const brokenOk =
+  check('manualFlag', manualBroken.added.exception_flags.join(','), 'missing_required') &&
+  check('manualFormat', String(manualBroken.added.format_errors.length), '1') &&
+  check('manualStatus', manualBroken.added.review_status, 'needs_review') &&
+  check('manualBlocked', String(canApprove(manualBroken.added)), 'false');
+console.log('');
+console.log(`  적용일을 비우고 변경단가에 "추후 안내"를 넣음`);
+console.log(
+  `    플래그=[${manualBroken.added.exception_flags}] 형식오류=${manualBroken.added.format_errors.length}건 상태=${manualBroken.added.review_status} 승인=${canApprove(manualBroken.added) ? '가능' : '차단'}  ${brokenOk ? 'PASS' : 'FAIL'}`,
+);
+console.log('    -> 필수값 검증과 형식 검증이 폼 입력에도 똑같이 적용된다.');
+
+// 단위가 표준 밖이면 파일과 같이 unit_mismatch가 붙어야 한다
+const badUnit = addManual({ ...NORMAL, '문서ID': 'MAN-003', '단위': '봉' });
+const unitOk = check('manualUnit', badUnit.added.exception_flags.join(','), 'unit_mismatch');
+console.log('');
+console.log(`  단위를 "봉"으로 등록 -> [${badUnit.added.exception_flags}]  ${unitOk ? 'PASS' : 'FAIL'}`);
+
+// 핵심: 파일로 들어온 항목과 중복 비교가 되는가
+const dupValues = {
+  '문서ID': 'MAN-004', '원본유형': '수기', '공급사': '가온푸드(예시)',
+  '원문 품목명': '토마토살사S/O', '규격': '4kg/PK', '단위': 'PK',
+  '기존단가(원)': '32000', '변경단가(원)': '33600', '적용일': '2026-08-01',
+};
+const dup = addManual(dupValues);
+const crossOk =
+  check('manualDup', dup.added.exception_flags.join(','), 'duplicate_suspected') &&
+  check('manualDupBase', String(dup.added.duplicate_of_doc_id), 'DOC-001');
+console.log('');
+console.log(
+  `  DOC-001과 같은 내용을 수기로 등록 -> [${dup.added.exception_flags}] 기준 ${dup.added.duplicate_of_doc_id}  ${crossOk ? 'PASS' : 'FAIL'}`,
+);
+console.log('    -> 파일로 들어온 항목과 나란히 비교된다. 이것이 별도 경로를 만들지 않은 이유다.');
+
+// 수기 항목도 승인하면 내보내기에 실린다
+const manualExport = buildExport(
+  recomputeItems(
+    normal.items.map((i) => (i.doc_id === 'MAN-001' ? reviewApprove(i, AT) : i)),
+    AT,
+  ),
+);
+const exported1 = manualExport.rows.find((r) => r.doc_id === 'MAN-001');
+const expOk =
+  check('manualExport', exported1 ? 'yes' : 'no', 'yes') &&
+  check('manualExportMethod', String(exported1?.source_ref.input_method), 'manual');
+console.log('');
+console.log(
+  `  수기 항목 승인 후 내보내기: ${exported1 ? `실림(input_method=${exported1.source_ref.input_method})` : '빠짐'}  ${expOk ? 'PASS' : 'FAIL'}`,
+);
+
+// 20건 판정은 그대로여야 한다
+const untouched = normal.items
+  .filter((i) => i.doc_id.startsWith('DOC-'))
+  .filter((i, idx) => sorted(i.exception_flags) !== sorted(items[idx].exception_flags)).length;
+if (untouched > 0) failures += untouched;
+console.log('');
+console.log(`  수기 등록 후 기존 20건 판정 변화: ${untouched}건  ${untouched === 0 ? 'PASS' : 'FAIL'}`);
 
 // ---------------------------------------------------------------- 결과
 console.log('');

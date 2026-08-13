@@ -21,6 +21,8 @@ export interface IntakeContext {
   batchNo: number;
   /** 이미 인입된 항목 수. 새 항목의 intake_seq는 여기서 이어진다 */
   startSeq: number;
+  /** 어떻게 들어왔는지. 화면에서 직접 등록하면 파일명과 행 번호가 없다 */
+  inputMethod?: 'file' | 'manual';
 }
 
 /**
@@ -33,12 +35,12 @@ export interface IntakeContext {
  */
 export function buildItems(
   rows: ParsedRow[],
-  fileName: string,
+  fileName: string | null,
   existing: Item[] = [],
   ctx: IntakeContext = { batchNo: 1, startSeq: 0 },
 ): Item[] {
   const incoming = rows.map((row, i) =>
-    buildItem(row, fileName, ctx.batchNo, ctx.startSeq + i + 1),
+    buildItem(row, fileName, ctx.batchNo, ctx.startSeq + i + 1, ctx.inputMethod ?? 'file'),
   );
   const items = [...existing, ...incoming];
 
@@ -50,11 +52,35 @@ export function buildItems(
   return items;
 }
 
+/**
+ * 화면에서 직접 등록한 항목 하나를 목록에 더한다.
+ *
+ * 파일 인입과 **같은 경로**를 탄다. 정규화 후보 생성, 예외 4종 탐지, 형식 검증,
+ * 중복 판정, 상태 결정이 모두 그대로 적용된다. 수기 등록만 별도 경로로 두면
+ * "직접 넣은 건 중복 검사가 안 된다" 같은 구멍이 생긴다. 공급사가 전화로 통보한
+ * 인상분을 담당자가 넣는 상황이 이 기능의 용도라, 파일로 들어온 항목과 나란히
+ * 비교되어야 중복 판정이 의미를 갖는다.
+ */
+export function addManualItem(
+  values: Record<string, string>,
+  existing: Item[] = [],
+  batchNo = 1,
+): Item[] {
+  // 수기 입력은 파일의 행이 아니므로 rowNo는 쓰이지 않는다.
+  const row: ParsedRow = { rowNo: 0, values };
+  return buildItems([row], null, existing, {
+    batchNo,
+    startSeq: existing.length,
+    inputMethod: 'manual',
+  });
+}
+
 function buildItem(
   row: ParsedRow,
-  fileName: string,
+  fileName: string | null,
   batchNo: number,
   intakeSeq: number,
+  inputMethod: 'file' | 'manual',
 ): Item {
   const observed = {} as ItemFields;
   let docId = '';
@@ -73,9 +99,11 @@ function buildItem(
     intake_seq: intakeSeq,
     doc_id: docId,
     source_ref: {
-      input_method: 'file',
-      file_name: fileName,
-      row_no: row.rowNo,
+      input_method: inputMethod,
+      // 수기 등록은 파일의 한 행이 아니므로 파일명과 행 번호를 남기지 않는다.
+      // 이 값이 비어 있는 것 자체가 "사람이 직접 넣었다"는 근거가 된다.
+      file_name: inputMethod === 'manual' ? null : fileName,
+      row_no: inputMethod === 'manual' ? null : row.rowNo,
       batch_no: batchNo,
     },
     observed,

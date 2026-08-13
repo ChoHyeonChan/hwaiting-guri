@@ -5,6 +5,7 @@ import { UploadPanel } from '@/components/UploadPanel';
 import { InboxTable } from '@/components/InboxTable';
 import { ItemDetail } from '@/components/ItemDetail';
 import { ExportPanel } from '@/components/ExportPanel';
+import { ManualEntryForm } from '@/components/ManualEntryForm';
 
 export default function Home() {
   const inbox = useInbox();
@@ -42,6 +43,9 @@ export default function Home() {
           onConfirmPending={inbox.confirmPendingFile}
           onCancelPending={inbox.cancelPendingFile}
         />
+
+        {/* 파일 없이도 넣을 수 있는 경로. 요건 ②의 "수기 등록" */}
+        <ManualEntryForm onSubmit={inbox.addManual} />
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_420px]">
           <InboxTable
