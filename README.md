@@ -212,6 +212,7 @@ DOC-020은 규격(`기존 1kg / 변경 4단`)과 단위(`KG/단`)가 각각 독�
 
 ```json
 {
+  "uid": "1:DOC-001",
   "doc_id": "DOC-001",
   "source_type": "PDF",
   "supplier_name": "가온푸드(예시)",
@@ -241,7 +242,8 @@ DOC-020은 규격(`기존 1kg / 변경 4단`)과 단위(`KG/단`)가 각각 독�
 
 | 필드 | 설명 |
 |---|---|
-| `doc_id` | 원본 증빙 식별자 |
+| `uid` | **행을 유일하게 식별하는 값.** 명세 권장안에는 없지만 덧붙였다. 문서ID는 공문이 재발송되거나 파일을 두 번 올리면 중복되므로, 받는 쪽이 이 값을 키로 쓰면 안전하다 |
+| `doc_id` | 원본 증빙 식별자. **유일하지 않을 수 있다** |
 | `source_type` | 증빙이 원래 들어온 형태(`PDF`·`XLSX`·`IMAGE`·`수기`). 표시용 값이다 |
 | `raw_item_name` / `normalized_item_name` | 공급사 표기 원문 / 정규화 후보 또는 사람이 고친 값 |
 | `price_before` / `price_after` | 인상 전·후 단가. 동결·인하도 있다 |
@@ -256,7 +258,7 @@ DOC-020은 규격(`기존 1kg / 변경 4단`)과 단위(`KG/단`)가 각각 독�
 CSV는 위 구조를 평탄화한다. 열 순서는 아래와 같고 인코딩은 UTF-8이다.
 
 ```
-doc_id, source_type, supplier_name, raw_item_name, normalized_item_name,
+uid, doc_id, source_type, supplier_name, raw_item_name, normalized_item_name,
 spec, unit, price_before, price_after, effective_date,
 review_status, exception_flags, reviewed_at, review_memo,
 source_input_method, source_file_name, source_row_no,
@@ -362,8 +364,10 @@ DOC-002를 반려한 상태에서 출력을 만들어 검사한다.
 - 승인 2건만 나가고 반려·미승인은 빠지는가
 - **예외를 수용해 승인한 DOC-019에 `spec_mismatch`와 검수 메모가 남는가** (체크리스트 3번)
 - 단가가 문자열이 아니라 정수로 나가는가
-- CSV 헤더 19열·BOM·행 수가 맞는가, JSON을 다시 파싱할 수 있는가
+- CSV 헤더 20열·BOM·행 수가 맞는가, JSON을 다시 파싱할 수 있는가
 - **승인 뒤 단가를 깨뜨리면 출력에서 빠지는가** — 승인이 풀리므로 깨진 값이 앞단으로 가지 않는다
+- **같은 문서ID 2건을 모두 승인해도 `uid`로 구분되는가**, 그리고 이중 반영 경고가 뜨는가
+- **메모에 따옴표·쉼표·줄바꿈이 있어도 CSV 왕복 후 원문 그대로인가** (RFC 4180)
 
 최근 실행 결과는 `docs/검증결과_20건_2026-08-05.pdf`에 있다.
 

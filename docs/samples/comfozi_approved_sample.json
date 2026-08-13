@@ -1,5 +1,6 @@
 [
   {
+    "uid": "1:DOC-001",
     "doc_id": "DOC-001",
     "source_type": "PDF",
     "supplier_name": "가온푸드(예시)",
@@ -31,6 +32,7 @@
     ]
   },
   {
+    "uid": "3:DOC-003",
     "doc_id": "DOC-003",
     "source_type": "IMAGE",
     "supplier_name": "가온푸드(예시)",
@@ -62,6 +64,7 @@
     ]
   },
   {
+    "uid": "16:DOC-016",
     "doc_id": "DOC-016",
     "source_type": "IMAGE",
     "supplier_name": "푸른포장(예시)",
@@ -100,6 +103,7 @@
     ]
   },
   {
+    "uid": "19:DOC-019",
     "doc_id": "DOC-019",
     "source_type": "XLSX",
     "supplier_name": "새봄식품(예시)",

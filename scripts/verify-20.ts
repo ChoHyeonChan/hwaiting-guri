@@ -24,6 +24,35 @@ import {
 import { buildExport, toCsv, toJson, CSV_COLUMNS } from '../src/lib/exportData';
 import type { ExceptionFlag, ReviewStatus } from '../src/lib/types';
 
+/**
+ * 내보낸 CSV를 셀 단위로 되읽는다.
+ *
+ * 우리 입력 파서는 한글 필수 컬럼을 요구해서 출력 CSV를 읽지 못한다.
+ * 이스케이프가 제대로 됐는지 보려면 범용 파서가 따로 필요하다.
+ */
+function parseCsvCells(text: string): string[][] {
+  const out: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+  const s = text.replace(/^﻿/, '');
+
+  for (let i = 0; i < s.length; i += 1) {
+    const c = s[i];
+    if (quoted) {
+      if (c === '"' && s[i + 1] === '"') { cell += '"'; i += 1; }
+      else if (c === '"') quoted = false;
+      else cell += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\r') continue;
+    else if (c === '\n') { row.push(cell); out.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell !== '' || row.length > 0) { row.push(cell); out.push(row); }
+  return out;
+}
+
 /** 명세가 정한 예외 4종. 형식 검증이 여기에 5번째를 끼워넣지 않았는지 확인하는 데 쓴다. */
 const FLAG_SET = new Set<ExceptionFlag>([
   'missing_required',
@@ -670,6 +699,47 @@ const dropOk = check('dropBroken', afterBreak.rows.map((r) => r.doc_id).join(','
 console.log('');
 console.log(`  승인 후 DOC-001 단가를 깨뜨림 -> 내보내기 대상 [${afterBreak.rows.map((r) => r.doc_id).join(', ')}]  ${dropOk ? 'PASS' : 'FAIL'}`);
 console.log('    -> 승인이 풀리므로 출력에서도 빠진다. 깨진 값이 앞단으로 나가지 않는다.');
+
+// 재발송·재업로드로 같은 문서ID가 두 번 승인될 수 있다.
+// 문서ID만으로는 행을 구분할 수 없으므로 유일 키(uid)가 함께 나가야 한다.
+const twiceIn = buildItems(parsed.rows, 'b.csv', buildItems(parsed.rows, 'a.csv'), {
+  batchNo: 2,
+  startSeq: 20,
+});
+const bothApproved = recomputeItems(
+  twiceIn.map((i) => (i.doc_id === 'DOC-001' ? reviewApprove(reviewSetMemo(i, '중복 확인함'), AT) : i)),
+  AT,
+);
+const dupExport = buildExport(bothApproved);
+const dupRows = dupExport.rows.filter((r) => r.doc_id === 'DOC-001');
+const uidUnique = new Set(dupRows.map((r) => r.uid)).size === dupRows.length;
+const warned = dupExport.issues.some((i) => i.field === 'doc_id');
+const dupOk =
+  check('dupCount', String(dupRows.length), '2') &&
+  check('dupUid', String(uidUnique), 'true') &&
+  check('dupWarn', String(warned), 'true');
+console.log('');
+console.log(`  같은 문서ID 2건을 모두 승인 -> 행 ${dupRows.length}건 · uid 유일 ${uidUnique} · 경고 ${warned}  ${dupOk ? 'PASS' : 'FAIL'}`);
+console.log(`    ${dupRows.map((r) => r.uid).join('  |  ')}`);
+console.log('    -> 문서ID는 겹쳐도 uid로 구분된다. 같은 인상분 이중 반영은 경고로 알린다.');
+
+// 메모에 쉼표·따옴표·줄바꿈이 들어가도 CSV가 깨지면 안 된다.
+const nastyMemo = '따옴표 "인용", 쉼표\n그리고 줄바꿈';
+const nastyExport = buildExport(
+  recomputeItems(
+    buildItems(parsed.rows, CSV_NAME).map((i) =>
+      i.doc_id === 'DOC-001' ? reviewApprove(reviewSetMemo(i, nastyMemo), AT) : i,
+    ),
+    AT,
+  ),
+);
+const nastyCsv = toCsv(nastyExport.rows);
+const memoCol = CSV_COLUMNS.indexOf('review_memo');
+const restoredMemo = parseCsvCells(nastyCsv)[1]?.[memoCol];
+const escOk = check('csvEscape', restoredMemo === nastyMemo ? 'same' : 'diff', 'same');
+console.log('');
+console.log(`  메모에 따옴표·쉼표·줄바꿈을 넣고 CSV 왕복 -> ${escOk ? '원문 그대로 PASS' : 'FAIL'}`);
+console.log('    -> RFC 4180대로 감싸고 이스케이프한다.');
 
 // ---------------------------------------------------------------- 결과
 console.log('');

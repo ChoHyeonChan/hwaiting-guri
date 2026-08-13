@@ -12,6 +12,14 @@ import type { Item } from './types';
 
 /** 단가는 문자열로 보관하다가 내보낼 때 정수로 바꾼다. 읽지 못하면 null로 두고 유효성 오류로 알린다. */
 export interface ExportRow {
+  /**
+   * 행을 유일하게 식별하는 값. 명세 권장안에는 없지만 덧붙였다.
+   *
+   * 문서ID는 같은 공문이 재발송되거나 파일을 두 번 올리면 중복된다. 회신(2026-08-11)도
+   * "문서ID를 유일 키로 강제하면 재업로드에서 저장이 실패한다"고 짚었다. 내부에서는 uid로
+   * 해결했는데 출력에 담지 않으면 받는 쪽이 같은 문제를 다시 겪는다.
+   */
+  uid: string;
   doc_id: string;
   source_type: string;
   supplier_name: string;
@@ -103,6 +111,7 @@ export function buildExport(items: Item[]): ExportResult {
     }
 
     rows.push({
+      uid: item.uid,
       doc_id: item.doc_id,
       source_type: item.current.source_type,
       supplier_name: item.current.supplier_name,
@@ -128,6 +137,25 @@ export function buildExport(items: Item[]): ExportResult {
     });
   }
 
+  // 같은 문서ID가 두 건 이상 나가면 알린다.
+  // 재발송 공문을 둘 다 수용 승인한 경우인데, 같은 단가 인상이 두 번 반영되는 사고가
+  // 이 도구가 막으려는 상황이라 출력 직전에 한 번 더 확인받는다.
+  const seen = new Map<string, ExportRow[]>();
+  for (const row of rows) {
+    const group = seen.get(row.doc_id);
+    if (group) group.push(row);
+    else seen.set(row.doc_id, [row]);
+  }
+  for (const [docId, group] of seen) {
+    if (group.length < 2) continue;
+    issues.push({
+      uid: group[0].uid,
+      doc_id: docId,
+      field: 'doc_id',
+      reason: `같은 문서ID가 ${group.length}건 승인되어 함께 나갑니다. 같은 인상분이 두 번 반영되지 않는지 확인이 필요합니다.`,
+    });
+  }
+
   return { rows, issues, excluded };
 }
 
@@ -137,7 +165,7 @@ export function toJson(rows: ExportRow[]): string {
 
 /** CSV 열 순서. JSON을 평탄화한 것이며 README 필드표와 같은 순서다. */
 export const CSV_COLUMNS = [
-  'doc_id', 'source_type', 'supplier_name', 'raw_item_name', 'normalized_item_name',
+  'uid', 'doc_id', 'source_type', 'supplier_name', 'raw_item_name', 'normalized_item_name',
   'spec', 'unit', 'price_before', 'price_after', 'effective_date',
   'review_status', 'exception_flags', 'reviewed_at', 'review_memo',
   'source_input_method', 'source_file_name', 'source_row_no',
@@ -163,6 +191,7 @@ export function toCsv(rows: ExportRow[]): string {
 
   for (const row of rows) {
     const flat: Record<string, string> = {
+      uid: row.uid,
       doc_id: row.doc_id,
       source_type: row.source_type,
       supplier_name: row.supplier_name,
