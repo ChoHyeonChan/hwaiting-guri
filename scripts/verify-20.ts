@@ -17,9 +17,11 @@ import { buildItems, canApprove, recomputeItems } from '../src/lib/pipeline';
 import {
   approve as reviewApprove,
   editField as reviewEdit,
+  reject as reviewReject,
   setMemo as reviewSetMemo,
   toggleDuplicateDismissed as reviewDismiss,
 } from '../src/lib/review';
+import { buildExport, toCsv, toJson, CSV_COLUMNS } from '../src/lib/exportData';
 import type { ExceptionFlag, ReviewStatus } from '../src/lib/types';
 
 /** 명세가 정한 예외 4종. 형식 검증이 여기에 5번째를 끼워넣지 않았는지 확인하는 데 쓴다. */
@@ -584,6 +586,90 @@ if (converted > 0) failures += converted;
 console.log('');
 console.log(`  단위를 임의로 바꾼 항목: ${converted}건  ${converted === 0 ? 'PASS' : 'FAIL'}`);
 console.log('    -> 표준 단위로 자동 환산하지 않는다. 관찰값을 그대로 두고 사람이 판단한다.');
+
+// ------------------------------------------- 9차: JSON·CSV 내보내기
+console.log('');
+console.log('='.repeat(72));
+console.log('9. 승인 항목 JSON·CSV 내보내기 (요건 ⑦ · 체크리스트 3번)');
+console.log('='.repeat(72));
+console.log('명세 §7: "출력에는 승인 항목만 포함하고 승인 전·보류·반려는 제외합니다."');
+console.log('공지 §1: "현재 값을 그대로 수용해 승인하면 exception_flags와 승인 사유를 함께 보존합니다."');
+console.log('');
+
+const exportBase = buildItems(parsed.rows, CSV_NAME);
+
+// 예외 없는 DOC-001은 그냥 승인하고,
+// 규격 불일치가 있는 DOC-019는 근거를 적어 수용 승인한다.
+const exportItems = recomputeItems(
+  exportBase.map((i) => {
+    if (i.doc_id === 'DOC-001') return reviewApprove(i, AT);
+    if (i.doc_id === 'DOC-019') return reviewApprove(reviewSetMemo(i, '공급사 확인 후 규격 변경 수용'), AT);
+    if (i.doc_id === 'DOC-002') return reviewReject(i, AT);
+    return i;
+  }),
+  AT,
+);
+
+const exported = buildExport(exportItems);
+
+const exportedIds = exported.rows.map((r) => r.doc_id).sort().join(',');
+const idsOk = check('exportIds', exportedIds, 'DOC-001,DOC-019');
+console.log(`  내보낸 항목: ${exportedIds || '(없음)'}  ${idsOk ? 'PASS' : 'FAIL'}`);
+console.log(`    -> 승인 2건만 나갔다. 반려(DOC-002)와 미승인 17건은 빠졌다.`);
+
+// 체크리스트 3번: 예외를 수용해 승인한 건의 플래그와 근거가 출력에 남아야 한다.
+const accepted = exported.rows.find((r) => r.doc_id === 'DOC-019')!;
+const keepsFlag = check('keepFlag', accepted.exception_flags.join(','), 'spec_mismatch');
+const keepsMemo = check('keepMemo', accepted.review_memo, '공급사 확인 후 규격 변경 수용');
+console.log('');
+console.log(`  DOC-019 exception_flags: [${accepted.exception_flags.join(', ')}]  ${keepsFlag ? 'PASS' : 'FAIL'}`);
+console.log(`  DOC-019 review_memo:     "${accepted.review_memo}"  ${keepsMemo ? 'PASS' : 'FAIL'}`);
+console.log('    -> 예외를 수용해 승인해도 플래그를 지우지 않고 근거와 함께 내보낸다.');
+
+// 단가는 문자열이 아니라 정수로 나가야 앞단이 그대로 쓸 수 있다.
+const typeOk =
+  check('priceType', typeof accepted.price_before, 'number') &&
+  check('priceValue', String(accepted.price_before), '86000');
+console.log('');
+console.log(`  price_before 타입: ${typeof accepted.price_before} (값 ${accepted.price_before})  ${typeOk ? 'PASS' : 'FAIL'}`);
+
+// 유효성 오류는 없어야 한다. 20건은 값이 전부 정상이다.
+const cleanOk = check('issues', String(exported.issues.length), '0') &&
+  check('excluded', String(exported.excluded.length), '0');
+console.log(`  출력 유효성 오류 ${exported.issues.length}건 · 제외 ${exported.excluded.length}건  ${cleanOk ? 'PASS' : 'FAIL'}`);
+
+// CSV 평탄화 확인
+const csv = toCsv(exported.rows);
+const csvLines = csv.replace(/^﻿/, '').trim().split('\r\n');
+const headerOk = check('csvHeader', csvLines[0], CSV_COLUMNS.join(','));
+const rowCountOk = check('csvRows', String(csvLines.length - 1), '2');
+const bomOk = check('csvBom', csv.startsWith('﻿') ? 'yes' : 'no', 'yes');
+console.log('');
+console.log(`  CSV 헤더 ${csvLines[0].split(',').length}열 · 데이터 ${csvLines.length - 1}행 · BOM ${bomOk ? '있음' : '없음'}  ${headerOk && rowCountOk && bomOk ? 'PASS' : 'FAIL'}`);
+console.log(`    ${csvLines[0]}`);
+console.log(`    ${csvLines[1]}`);
+
+// JSON은 다시 읽을 수 있어야 한다. 앞단이 파싱하지 못하면 의미가 없다.
+let reparsed = 0;
+try {
+  reparsed = (JSON.parse(toJson(exported.rows)) as unknown[]).length;
+} catch {
+  reparsed = -1;
+}
+const jsonOk = check('jsonParse', String(reparsed), '2');
+console.log('');
+console.log(`  JSON 재파싱: ${reparsed}건  ${jsonOk ? 'PASS' : 'FAIL'}`);
+
+// 승인 뒤 값이 깨지면 출력에서 빠져야 한다.
+const brokenAfter = recomputeItems(
+  exportItems.map((i) => (i.doc_id === 'DOC-001' ? reviewEdit(i, 'price_before', '삼만원', AT) : i)),
+  AT,
+);
+const afterBreak = buildExport(brokenAfter);
+const dropOk = check('dropBroken', afterBreak.rows.map((r) => r.doc_id).join(','), 'DOC-019');
+console.log('');
+console.log(`  승인 후 DOC-001 단가를 깨뜨림 -> 내보내기 대상 [${afterBreak.rows.map((r) => r.doc_id).join(', ')}]  ${dropOk ? 'PASS' : 'FAIL'}`);
+console.log('    -> 승인이 풀리므로 출력에서도 빠진다. 깨진 값이 앞단으로 나가지 않는다.');
 
 // ---------------------------------------------------------------- 결과
 console.log('');

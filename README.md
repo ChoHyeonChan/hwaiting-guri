@@ -23,7 +23,7 @@ npm run dev          # http://localhost:3000
 npm run build        # 프로덕션 빌드
 npx tsc --noEmit     # 타입체크
 npx eslint .         # 린트
-npx tsx scripts/verify-20.ts   # 자체 테스트 (8개 섹션)
+npx tsx scripts/verify-20.ts   # 자체 테스트 (9개 섹션)
 ```
 
 자체 테스트는 저장소 상위 폴더의 `42_해커톤_업로드용_증빙20건_2026-08-04.csv`를 읽는다.
@@ -251,7 +251,45 @@ DOC-020은 규격(`기존 1kg / 변경 4단`)과 단위(`KG/단`)가 각각 독�
 | `source_ref.row_no` | 헤더를 1행으로 세는 1-indexed 행 번호 |
 | `change_log` | 사람이 값을 고친 내역. 시각·필드·이전값·수정값·동작 |
 
-CSV는 위 구조를 평탄화한다(`source_ref.file_name` → `source_file_name`). 인코딩은 UTF-8.
+### CSV 평탄화 규칙
+
+CSV는 위 구조를 평탄화한다. 열 순서는 아래와 같고 인코딩은 UTF-8이다.
+
+```
+doc_id, source_type, supplier_name, raw_item_name, normalized_item_name,
+spec, unit, price_before, price_after, effective_date,
+review_status, exception_flags, reviewed_at, review_memo,
+source_input_method, source_file_name, source_row_no,
+change_log_count, change_log_json
+```
+
+- **중첩 필드** `source_ref.*`는 `source_` 접두사를 붙여 편다(`file_name` → `source_file_name`).
+- **`exception_flags`는 세미콜론(`;`)으로 잇는다.** 쉼표를 쓰면 열 구분자와 겹쳐 읽기 어려워진다.
+- **`change_log`는 배열이라 열 하나로 펼 수 없어** `change_log_count`(건수)와
+  `change_log_json`(JSON 문자열) 두 열로 남긴다. 건수만 두면 CSV만 받는 쪽이 이력을 잃는다.
+- **맨 앞에 UTF-8 BOM을 붙인다.** 없으면 엑셀이 UTF-8을 인식하지 못해 한글이 깨진다.
+- 값에 쉼표·따옴표·줄바꿈이 있으면 RFC 4180대로 따옴표로 감싸고 내부 따옴표는 두 번 쓴다.
+- 줄바꿈은 `CRLF`.
+
+### 샘플 파일
+
+실제 화면에서 검수하고 내려받은 결과를 `docs/samples/`에 넣어 두었다.
+손으로 쓴 예시가 아니라 앱이 만든 출력 그대로다.
+
+| 파일 | 내용 |
+|---|---|
+| `docs/samples/comfozi_approved_sample.json` | 승인 4건 |
+| `docs/samples/comfozi_approved_sample.csv` | 같은 4건을 평탄화한 것 |
+
+샘플에 일부러 네 가지 경로를 섞었다.
+
+| 문서 | 담긴 경로 |
+|---|---|
+| DOC-001 · DOC-003 | 예외 없이 바로 승인 |
+| DOC-016 | **값을 고쳐 예외를 해소한 뒤 승인** — 비어 있던 적용일을 채웠고 `change_log`에 수정과 승인이 2건 남았다 |
+| DOC-019 | **예외를 수용해 승인** — `exception_flags`에 `spec_mismatch`가 그대로 있고 `review_memo`에 판단 근거가 있다 |
+
+승인하지 않은 16건과 반려한 DOC-018은 두 파일 모두에 들어 있지 않다.
 
 ---
 
@@ -261,7 +299,7 @@ CSV는 위 구조를 평탄화한다(`source_ref.file_name` → `source_file_nam
 npx tsx scripts/verify-20.ts
 ```
 
-여덟 가지를 확인한다.
+아홉 가지를 확인한다.
 
 1. **20건 판정이 창업팀 기대 결과와 일치하는가** (정정 공지 §4 표 기준)
 2. **대기 사유 문구가 플래그마다 비어 있지 않은가** — 사유가 비면 화면에 표시할 게 없다는 뜻이라 실패로 본다
@@ -317,6 +355,15 @@ npx tsx scripts/verify-20.ts
 
 여기에 더해 **단위를 임의로 바꾼 항목이 0건인지** 확인한다. 관찰값을 그대로 두고
 사람이 판단하게 하는 것이 명세의 자동 환산 금지 원칙이다.
+
+9번은 **내보내기**를 본다. 20건 중 DOC-001을 그냥 승인, DOC-019를 근거 메모와 함께 수용 승인,
+DOC-002를 반려한 상태에서 출력을 만들어 검사한다.
+
+- 승인 2건만 나가고 반려·미승인은 빠지는가
+- **예외를 수용해 승인한 DOC-019에 `spec_mismatch`와 검수 메모가 남는가** (체크리스트 3번)
+- 단가가 문자열이 아니라 정수로 나가는가
+- CSV 헤더 19열·BOM·행 수가 맞는가, JSON을 다시 파싱할 수 있는가
+- **승인 뒤 단가를 깨뜨리면 출력에서 빠지는가** — 승인이 풀리므로 깨진 값이 앞단으로 가지 않는다
 
 최근 실행 결과는 `docs/검증결과_20건_2026-08-05.pdf`에 있다.
 
@@ -442,10 +489,9 @@ npx tsx scripts/verify-20.ts
 아래는 아직 구현되지 않았다.
 
 - 수기 등록 폼
-- JSON·CSV 내보내기 구현
 
 완료된 것은 입력 파싱, 정규화, 예외 탐지, 값 형식 검증, 상태 결정, 검수 인박스·항목 상세 화면,
-사람 검수 흐름과 변경 이력, 재업로드 누적 인입, 자체 테스트, 배포까지다.
+사람 검수 흐름과 변경 이력, 재업로드 누적 인입, **JSON·CSV 내보내기**, 자체 테스트, 배포까지다.
 
 ---
 

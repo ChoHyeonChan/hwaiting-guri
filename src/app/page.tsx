@@ -4,6 +4,7 @@ import { useInbox } from '@/lib/store';
 import { UploadPanel } from '@/components/UploadPanel';
 import { InboxTable } from '@/components/InboxTable';
 import { ItemDetail } from '@/components/ItemDetail';
+import { ExportPanel } from '@/components/ExportPanel';
 
 export default function Home() {
   const inbox = useInbox();
@@ -66,6 +67,9 @@ export default function Home() {
             }}
           />
         </div>
+
+        {/* 검수를 마친 뒤에 오는 단계라 목록 아래에 둔다 */}
+        {inbox.items.length > 0 && <ExportPanel items={inbox.items} />}
       </div>
     </main>
   );

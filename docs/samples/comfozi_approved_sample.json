@@ -1,0 +1,135 @@
+[
+  {
+    "doc_id": "DOC-001",
+    "source_type": "PDF",
+    "supplier_name": "가온푸드(예시)",
+    "raw_item_name": "토마토살사S/O",
+    "normalized_item_name": "토마토 살사 소스",
+    "spec": "4kg/PK",
+    "unit": "PK",
+    "price_before": 32000,
+    "price_after": 33600,
+    "effective_date": "2026-08-01",
+    "review_status": "approved",
+    "exception_flags": [],
+    "format_errors": [],
+    "source_ref": {
+      "input_method": "file",
+      "file_name": "42_해커톤_업로드용_증빙20건_2026-08-04.csv",
+      "row_no": 2
+    },
+    "reviewed_at": "2026-08-13T16:19:44.846Z",
+    "review_memo": "",
+    "change_log": [
+      {
+        "at": "2026-08-13T16:19:44.846Z",
+        "field": "review_status",
+        "from": "new",
+        "to": "approved",
+        "action": "approve"
+      }
+    ]
+  },
+  {
+    "doc_id": "DOC-003",
+    "source_type": "IMAGE",
+    "supplier_name": "가온푸드(예시)",
+    "raw_item_name": "밀또띠아10인치",
+    "normalized_item_name": "밀 또띠아 10인치",
+    "spec": "12매×10PK/BOX",
+    "unit": "BOX",
+    "price_before": 36000,
+    "price_after": 37800,
+    "effective_date": "2026-08-05",
+    "review_status": "approved",
+    "exception_flags": [],
+    "format_errors": [],
+    "source_ref": {
+      "input_method": "file",
+      "file_name": "42_해커톤_업로드용_증빙20건_2026-08-04.csv",
+      "row_no": 4
+    },
+    "reviewed_at": "2026-08-13T16:19:56.312Z",
+    "review_memo": "",
+    "change_log": [
+      {
+        "at": "2026-08-13T16:19:56.312Z",
+        "field": "review_status",
+        "from": "new",
+        "to": "approved",
+        "action": "approve"
+      }
+    ]
+  },
+  {
+    "doc_id": "DOC-016",
+    "source_type": "IMAGE",
+    "supplier_name": "푸른포장(예시)",
+    "raw_item_name": "투명리드500",
+    "normalized_item_name": "투명 리드",
+    "spec": "500EA/BOX",
+    "unit": "BOX",
+    "price_before": 39000,
+    "price_after": 41000,
+    "effective_date": "2026-08-20",
+    "review_status": "approved",
+    "exception_flags": [],
+    "format_errors": [],
+    "source_ref": {
+      "input_method": "file",
+      "file_name": "42_해커톤_업로드용_증빙20건_2026-08-04.csv",
+      "row_no": 17
+    },
+    "reviewed_at": "2026-08-13T16:21:25.170Z",
+    "review_memo": "",
+    "change_log": [
+      {
+        "at": "2026-08-13T16:20:42.829Z",
+        "field": "effective_date",
+        "from": "",
+        "to": "2026-08-20",
+        "action": "edit"
+      },
+      {
+        "at": "2026-08-13T16:21:25.170Z",
+        "field": "review_status",
+        "from": "new",
+        "to": "approved",
+        "action": "approve"
+      }
+    ]
+  },
+  {
+    "doc_id": "DOC-019",
+    "source_type": "XLSX",
+    "supplier_name": "새봄식품(예시)",
+    "raw_item_name": "냉동돈전지",
+    "normalized_item_name": "냉동 돼지고기 전지",
+    "spec": "기존 10kg / 변경 9kg",
+    "unit": "BOX",
+    "price_before": 86000,
+    "price_after": 86000,
+    "effective_date": "2026-08-15",
+    "review_status": "approved",
+    "exception_flags": [
+      "spec_mismatch"
+    ],
+    "format_errors": [],
+    "source_ref": {
+      "input_method": "file",
+      "file_name": "42_해커톤_업로드용_증빙20건_2026-08-04.csv",
+      "row_no": 20
+    },
+    "reviewed_at": "2026-08-13T16:20:26.204Z",
+    "review_memo": "공급사 확인 완료. 박스당 10kg에서 9kg으로 축소되고 단가는 86,000원 동결. kg당 실질 11% 인상이나 8월 생산분까지 수용하기로 협의함.",
+    "change_log": [
+      {
+        "at": "2026-08-13T16:20:26.204Z",
+        "field": "review_status",
+        "from": "on_hold",
+        "to": "approved",
+        "action": "approve"
+      }
+    ]
+  }
+]
