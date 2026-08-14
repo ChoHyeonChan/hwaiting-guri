@@ -29,30 +29,48 @@ export function ReviewActions({
    */
   const [nudged, setNudged] = useState(false);
 
+  /**
+   * 입력란에서 곧바로 눌러도 한 번에 먹히게 하는 버튼 속성.
+   *
+   * 값과 메모는 포커스가 빠질 때 커밋된다. 그래서 입력 도중 이 버튼을 누르면
+   * 브라우저가 mousedown에서 포커스를 옮기고, 그 blur가 목록 전체를 다시 계산해
+   * 버튼이 다시 그려진다. mousedown과 mouseup을 받은 요소가 달라지므로 브라우저는
+   * click을 발생시키지 않고, 결국 눌러도 아무 일이 없다. 실제로 이벤트를 찍어 보면
+   * `mousedown -> blur`에서 끊기고 click이 오지 않는다.
+   *
+   * 그래서 mousedown의 기본 동작(포커스 이동)을 막아 이 경합 자체를 없애고,
+   * 커밋은 click 안에서 직접 일으킨다. blur()는 그 자리에서 처리되므로 이어지는
+   * 요청은 커밋된 값을 본 뒤에 나간다.
+   */
+  const commitThenRun = (run: () => void) => ({
+    onMouseDown: (e: React.MouseEvent) => e.preventDefault(),
+    onClick: () => {
+      (document.activeElement as HTMLElement | null)?.blur();
+      run();
+    },
+  });
+
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4">
       <h3 className="text-sm font-semibold text-navy">검수</h3>
 
       <div className="mt-2 flex flex-wrap gap-2">
         {/*
-          승인이 막혀 있어도 disabled로 두지 않는다.
+          승인이 막혀 있어도 disabled로 두지 않는다. 값을 고쳐 조건을 막 채운 순간에도
+          같은 클릭으로 승인까지 가야 하는데, disabled면 그 클릭이 버려진다.
 
-          값을 고친 직후 곧바로 승인을 누르는 흐름이 실제로 가장 잦다. 입력란은
-          포커스가 빠질 때 값을 커밋하므로, 마우스를 누르는 순간 커밋이 일어나
-          승인 조건이 그제서야 충족된다. 이때 버튼이 disabled면 브라우저가 그 클릭을
-          버려서 "한 번 더 눌러야 하는" 동작이 된다. 눌리게 두고 조건은 여기서 본다.
-          승인 자체도 review.approve가 canApprove를 다시 검사하므로 이중으로 막힌다.
+          승인 여부를 여기서 판정하지도 않는다. 이 자리의 block은 커밋 직전에 계산된
+          값이라, 방금 채운 조건이 반영돼 있지 않다. 판정은 최신 목록을 쥔 store에
+          맡기고(review.approve가 canApprove를 검사한다) 여기서는 요청만 보낸다.
         */}
         <button
           type="button"
-          onClick={() => {
+          {...commitThenRun(() => {
             if (approved) return;
-            if (block) {
-              setNudged(true);
-              return;
-            }
             onApprove(item.uid);
-          }}
+            // 승인됐다면 차단 사유 자체가 사라지므로 이 표시는 드러나지 않는다.
+            setNudged(true);
+          })}
           aria-disabled={block !== null || approved}
           className={`rounded-md px-3 py-1.5 text-sm font-medium ${
             block !== null || approved
@@ -64,7 +82,7 @@ export function ReviewActions({
         </button>
         <button
           type="button"
-          onClick={() => onReject(item.uid)}
+          {...commitThenRun(() => onReject(item.uid))}
           disabled={item.review_status === 'rejected'}
           className="rounded-md border border-rose-300 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
         >
@@ -73,7 +91,7 @@ export function ReviewActions({
         {decided && (
           <button
             type="button"
-            onClick={() => onReopen(item.uid)}
+            {...commitThenRun(() => onReopen(item.uid))}
             className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
           >
             재검토
@@ -104,7 +122,7 @@ export function ReviewActions({
               </p>
               <button
                 type="button"
-                onClick={() => onToggleDuplicate(item.uid)}
+                {...commitThenRun(() => onToggleDuplicate(item.uid))}
                 className="mt-2 rounded-md border border-pink-300 bg-white px-2.5 py-1 text-xs text-pink-900 hover:bg-pink-100"
               >
                 다시 중복으로 보기
@@ -117,7 +135,7 @@ export function ReviewActions({
               </p>
               <button
                 type="button"
-                onClick={() => onToggleDuplicate(item.uid)}
+                {...commitThenRun(() => onToggleDuplicate(item.uid))}
                 className="mt-2 rounded-md border border-pink-300 bg-white px-2.5 py-1 text-xs text-pink-900 hover:bg-pink-100"
               >
                 중복 아님으로 되돌리기
