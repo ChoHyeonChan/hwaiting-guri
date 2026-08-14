@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseEvidenceCsv, CsvParseError } from './parseCsv';
-import { addManualItem, buildItems, effectiveFlags, recomputeItems, restoreItems } from './pipeline';
+import { addManualItem, addManualItems, buildItems, effectiveFlags, recomputeItems, restoreItems } from './pipeline';
 import * as review from './review';
 import { SAMPLE_CSV, SAMPLE_FILE_NAME } from './sampleData';
 import type { CurrentFields, ExceptionFlag, Item, ReviewStatus } from './types';
@@ -253,6 +253,34 @@ export function useInbox() {
     });
   }, []);
 
+  /**
+   * PDF에서 읽어 사람이 확인한 여러 건을 한 번에 넣는다.
+   *
+   * 파일·수기 등록과 같은 파이프라인을 탄다. 읽어 온 값이라고 판정을 건너뛰면
+   * PDF로 들어온 건만 중복 검사가 빠지는 구멍이 생긴다.
+   */
+  const addExtracted = useCallback((rows: Record<string, string>[]) => {
+    if (rows.length === 0) return;
+    setData((prev) => {
+      const batchNo = prev.batchCount + 1;
+      const items = addManualItems(rows, prev.items, batchNo);
+      const incoming = items.slice(prev.items.length);
+      return {
+        ...prev,
+        items,
+        selectedId: incoming[0]?.uid ?? prev.selectedId,
+        loadState: 'success',
+        errorMessage: '',
+        batchCount: batchNo,
+        lastIntake: {
+          batchNo,
+          added: incoming.length,
+          duplicates: incoming.filter((i) => i.exception_flags.includes('duplicate_suspected')).length,
+        },
+      };
+    });
+  }, []);
+
   /** 같은 파일 확인 안내에서 계속 진행을 고른 경우 */
   const confirmPendingFile = useCallback(() => {
     if (!pendingFile) return;
@@ -354,7 +382,7 @@ export function useInbox() {
     filters: data.filters,
     selectedId: data.selectedId,
     filtered, counts, selected,
-    setFilters, setSelectedId, load, reset, addManual, loadSample,
+    setFilters, setSelectedId, load, reset, addManual, addExtracted, loadSample,
     pendingFile, confirmPendingFile, cancelPendingFile,
     lastIntake: data.lastIntake, batchCount: data.batchCount,
     ...actions,

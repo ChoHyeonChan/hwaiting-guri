@@ -66,9 +66,21 @@ export function addManualItem(
   existing: Item[] = [],
   batchNo = 1,
 ): Item[] {
-  // 수기 입력은 파일의 행이 아니므로 rowNo와 원문은 쓰이지 않는다.
-  const row: ParsedRow = { rowNo: 0, values, raw: '' };
-  return buildItems([row], null, existing, {
+  return addManualItems([values], existing, batchNo);
+}
+
+/**
+ * 여러 건을 한 번에 더한다. PDF에서 읽은 표는 행이 여럿이다.
+ * 한 건씩 넣으면 인입 배치가 쪼개져 중복 사유 문구가 어긋난다.
+ */
+export function addManualItems(
+  rows: Record<string, string>[],
+  existing: Item[] = [],
+  batchNo = 1,
+): Item[] {
+  // 화면에서 만든 항목은 파일의 행이 아니므로 rowNo와 원문은 쓰이지 않는다.
+  const parsed: ParsedRow[] = rows.map((values) => ({ rowNo: 0, values, raw: '' }));
+  return buildItems(parsed, null, existing, {
     batchNo,
     startSeq: existing.length,
     inputMethod: 'manual',

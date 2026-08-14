@@ -10,10 +10,10 @@
  *
  * 실행: npx tsx scripts/verify-20.ts
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseEvidenceCsv, type ParsedRow } from '../src/lib/parseCsv';
-import { addManualItem, buildItems, canApprove, recomputeItems, restoreItems } from '../src/lib/pipeline';
+import { addManualItem, addManualItems, buildItems, canApprove, recomputeItems, restoreItems } from '../src/lib/pipeline';
 import {
   approve as reviewApprove,
   editField as reviewEdit,
@@ -23,6 +23,7 @@ import {
 } from '../src/lib/review';
 import { buildExport, toCsv, toJson, CSV_COLUMNS } from '../src/lib/exportData';
 import { SAMPLE_CSV, SAMPLE_FILE_NAME } from '../src/lib/sampleData';
+import { extractRowsFromPdf } from '../src/lib/pdfExtract';
 import type { ExceptionFlag, ReviewStatus } from '../src/lib/types';
 
 /**
@@ -963,13 +964,105 @@ console.log('');
 console.log(`  raw_line이 없던 예전 백업 복원: ${healOk ? '빈 값으로 채움 PASS' : 'FAIL'}`);
 console.log('    -> 표시 전용 필드 하나 때문에 검수하던 승인·메모를 날리지 않는다.');
 
-// ---------------------------------------------------------------- 결과
-console.log('');
-console.log('='.repeat(72));
-if (failures === 0) {
-  console.log('전체 통과. 기대 결과와 모두 일치했다.');
-  process.exit(0);
-} else {
-  console.log(`실패 ${failures}건. 위 FAIL 항목을 확인할 것.`);
-  process.exit(1);
+async function main() {
+  // ------------------------------------------- 12차: PDF 표 구조 복원
+  console.log('');
+  console.log('='.repeat(72));
+  console.log('12. PDF 공문에서 표 읽기 (추가 요건)');
+  console.log('='.repeat(72));
+  console.log('명세: "원본 문서 입력을 한 가지 방식으로 추가하고 후보 생성 가능성을 탐색"');
+  console.log('      "OCR·AI 정확도 목표 없음 / 실패 사례와 미지원 형식 기록"');
+  console.log('');
+  console.log('제공 PDF는 텍스트 레이어가 있어 OCR이 필요 없다. 과제는 표 구조 복원이다.');
+  console.log('창업팀 샘플 공문 4종으로 검사한다.');
+  console.log('');
+
+  const PDF_DIR = resolve(import.meta.dirname, '../../추가자료');
+  /** 문서마다 표에 실제로 몇 품목이 있는지. 원본을 눈으로 세어 적었다 */
+  const PDF_EXPECTED: Record<string, number> = {
+    '1_다품목_공문_예시.pdf': 6,
+    '2_일부가격누락_공문_예시.pdf': 4,
+    '44_해커톤_OCR샘플_가온푸드_단가변경공문_2026-08-05.pdf': 3,
+    '44_해커톤_OCR샘플_바다원_단가조정공문_재발송_2026-08-05.pdf': 1,
+  };
+
+  if (!existsSync(PDF_DIR)) {
+    console.log('  샘플 공문 폴더가 없어 건너뛴다(창업팀 자료라 저장소에 포함하지 않았다).');
+  } else {
+    console.log(['파일', '실제', '추출', '판정'].map((h, i) => pad(h, [46, 6, 6, 6][i])).join(''));
+    console.log('-'.repeat(72));
+
+    for (const [name, expected] of Object.entries(PDF_EXPECTED)) {
+      const path = resolve(PDF_DIR, name);
+      if (!existsSync(path)) {
+        console.log(pad(name.slice(0, 44), 46) + '파일 없음 — 건너뜀');
+        continue;
+      }
+      const buffer = readFileSync(path);
+      const file = new File([new Uint8Array(buffer)], name, { type: 'application/pdf' });
+      const extracted = await extractRowsFromPdf(file);
+      const ok = check(`pdf:${name}`, String(extracted.rows.length), String(expected));
+      console.log(
+        pad(name.slice(0, 44), 46) +
+          pad(String(expected), 6) +
+          pad(String(extracted.rows.length), 6) +
+          (ok ? 'PASS' : 'FAIL'),
+      );
+    }
+
+    // 읽어 온 값이 그대로 쓸 수 있는 형태인지 본다.
+    // 단가에 콤마나 "원"이 남아 있으면 형식 검증에서 전부 걸린다.
+    const gaon = await extractRowsFromPdf(
+      new File(
+        [new Uint8Array(readFileSync(resolve(PDF_DIR, '44_해커톤_OCR샘플_가온푸드_단가변경공문_2026-08-05.pdf')))],
+        'gaon.pdf',
+        { type: 'application/pdf' },
+      ),
+    );
+    const first = gaon.rows[0]?.values ?? {};
+    const cleanOk =
+      check('pdfPrice', first['기존단가(원)'] ?? '', '32000') &&
+      check('pdfDate', first['적용일'] ?? '', '2026-08-01') &&
+      check('pdfUnit', first['단위'] ?? '', 'PK');
+    console.log('');
+    console.log(`  첫 행: ${first['원문 품목명']} | ${first['규격']} | ${first['단위']} | ${first['기존단가(원)']} -> ${first['변경단가(원)']} | ${first['적용일']}`);
+    console.log(`  단가에서 콤마와 "원"을 떼고 그대로 쓸 수 있는가: ${cleanOk ? 'PASS' : 'FAIL'}`);
+
+    // 읽어 온 항목도 같은 파이프라인을 타는지. 별도 경로를 만들면 중복 검사가 빠진다.
+    const viaPdf = addManualItems(
+      gaon.rows.map((r) => ({ ...r.values, '문서ID': 'PDF-001', '공급사': '가온푸드(예시)' })),
+      [],
+      1,
+    );
+    const pipelineOk =
+      check('pdfPipeline', String(viaPdf.length), '3') &&
+      check('pdfNorm', viaPdf[0].normalization.source, 'dictionary') &&
+      check('pdfMethod', viaPdf[0].source_ref.input_method, 'manual');
+    console.log('');
+    console.log(`  읽은 3건을 목록에 넣음 -> ${viaPdf.length}건 · 정규화 ${viaPdf[0].normalization.source} · 출처 ${viaPdf[0].source_ref.input_method}  ${pipelineOk ? 'PASS' : 'FAIL'}`);
+    console.log('    -> 파일·수기 등록과 같은 판정을 거친다. 읽어 왔다고 검사를 건너뛰지 않는다.');
+
+    // 스캔 PDF는 지원하지 않는다. 글자가 없으면 그 사실을 알려야 한다.
+    const emptyPdf = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'broken.pdf', {
+      type: 'application/pdf',
+    });
+    const broken = await extractRowsFromPdf(emptyPdf);
+    const brokenOk = check('pdfBroken', String(broken.rows.length === 0 && broken.problems.length > 0), 'true');
+    console.log('');
+    console.log(`  깨진 PDF를 넣으면 이유를 알려주는가: ${brokenOk ? 'PASS' : 'FAIL'}`);
+    console.log(`    "${broken.problems[0]?.slice(0, 60)}"`);
+  }
+
+  // ---------------------------------------------------------------- 결과
+  console.log('');
+  console.log('='.repeat(72));
+  if (failures === 0) {
+    console.log('전체 통과. 기대 결과와 모두 일치했다.');
+    process.exit(0);
+  } else {
+    console.log(`실패 ${failures}건. 위 FAIL 항목을 확인할 것.`);
+    process.exit(1);
+  }
 }
+
+main();

@@ -6,6 +6,7 @@ import { InboxTable } from '@/components/InboxTable';
 import { ItemDetail } from '@/components/ItemDetail';
 import { ExportPanel } from '@/components/ExportPanel';
 import { ManualEntryForm } from '@/components/ManualEntryForm';
+import { PdfImportPanel } from '@/components/PdfImportPanel';
 
 export default function Home() {
   const inbox = useInbox();
@@ -47,6 +48,9 @@ export default function Home() {
 
         {/* 파일 없이도 넣을 수 있는 경로. 요건 ②의 "수기 등록" */}
         <ManualEntryForm onSubmit={inbox.addManual} />
+
+        {/* 추가 요건: 원본 문서(PDF) 입력 */}
+        <PdfImportPanel onRegister={inbox.addExtracted} />
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_420px]">
           <InboxTable
