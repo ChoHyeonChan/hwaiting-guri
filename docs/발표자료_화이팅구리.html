@@ -90,6 +90,8 @@
     padding: 5mm 6mm; background: #fff;
   }
   .card.tint { background: var(--surface); }
+  /* 카드가 세로로 늘어나는 자리에서 내용이 위로 몰리지 않게 한다 */
+  .card.mid { display: flex; flex-direction: column; justify-content: center; }
   .card.gold { background: var(--gold-soft); border-color: var(--gold); }
   .card h3 { margin-bottom: 2.5mm; }
 
@@ -140,12 +142,84 @@
   }
   pre .g { color: #7EE0A6; }
   pre .y { color: #F0C674; }
+
+  /* ── 여기부터 리듬을 만드는 장치 ───────────────────────────────
+     흰 바탕만 이어지면 어디가 핵심인지 보이지 않는다.
+     결론에 해당하는 장을 반전시켜 눈이 쉬어 가게 한다. */
+
+  .slide.invert { background: var(--navy); color: #DCE5F0; }
+  .slide.invert h2 { color: #fff; }
+  .slide.invert h3 { color: var(--gold); }
+  .slide.invert b, .slide.invert strong { color: #fff; }
+  .slide.invert .mute { color: rgba(255,255,255,.58); }
+  .slide.invert::before, .slide.invert::after { color: rgba(255,255,255,.42); }
+  .slide.invert .card { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.16); }
+  .slide.invert .card.gold { background: rgba(200,156,74,.13); border-color: rgba(200,156,74,.55); }
+  .slide.invert th { background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.18); }
+  .slide.invert td { border-color: rgba(255,255,255,.14); }
+  .slide.invert tbody tr:nth-child(even) td { background: rgba(255,255,255,.035); }
+  .slide.invert pre { background: rgba(0,0,0,.34); }
+  .slide.invert .kpi { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.16); }
+  .slide.invert .kpi .v { color: #fff; }
+  .slide.invert .kpi .k { color: rgba(255,255,255,.62); }
+  .slide.invert .warn { color: #F0B357; }
+  .slide.invert .ok { color: #7EE0A6; }
+  .slide.invert code { background: rgba(255,255,255,.12); color: #F0DDBB; }
+
+  /* 제목 앞 축 번호 배지 */
+  .axis {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 9mm; height: 9mm; border-radius: 50%;
+    background: var(--gold); color: #fff;
+    font-size: 13pt; font-weight: 700; margin-right: 3.5mm;
+    vertical-align: middle; line-height: 1;
+  }
+  .slide.invert .axis { background: var(--gold); color: var(--navy); }
+
+  /* 파이프라인 화살표 */
+  .arrow {
+    display: flex; align-items: center; padding: 0 1.5mm;
+    color: var(--gold); font-size: 15pt; font-weight: 700;
+  }
+
+  /* 수치 카드에 옅은 바탕을 깔아 표와 구분한다 */
+  .kpi { background: linear-gradient(180deg, #fff 55%, var(--gold-soft)); }
+  .kpi .v { font-size: 23pt; }
+
+  /* 큰 수치 하나를 앵커로 세우는 블록 */
+  .punch {
+    display: flex; align-items: baseline; gap: 3mm;
+    padding: 3mm 0 1mm;
+  }
+  .punch .big { font-size: 30pt; font-weight: 700; color: var(--warn); line-height: 1; }
+  .slide.invert .punch .big { color: #F0B357; }
+  .punch .cap { font-size: 10.5pt; color: var(--mute); }
+  .slide.invert .punch .cap { color: rgba(255,255,255,.62); }
+
+  /* 표지 장식 */
+  .deco-a {
+    position: absolute; right: -55mm; top: -55mm;
+    width: 190mm; height: 190mm; border-radius: 50%;
+    background: radial-gradient(circle at 32% 32%, rgba(200,156,74,.22), rgba(200,156,74,0) 62%);
+  }
+  .deco-b {
+    position: absolute; right: 0; bottom: 0;
+    width: 120mm; height: 5mm; background: var(--gold); opacity: .85;
+  }
+  .deco-c {
+    position: absolute; right: 26mm; top: 34mm;
+    width: 46mm; height: 46mm; border: 2px solid rgba(200,156,74,.42);
+    border-radius: 50%;
+  }
 </style>
 </head>
 <body>
 
 <!-- 1. 표지 -->
 <section class="slide cover" data-no="">
+  <div class="deco-a"></div>
+  <div class="deco-c"></div>
+  <div class="deco-b"></div>
   <div class="sub">2026 스타트업 영그라운드 MVP 개발 해커톤 · 컴포지</div>
   <div class="rule"></div>
   <h1>ComfoziAI 구매 증빙 인박스</h1>
@@ -184,12 +258,16 @@
 
 <!-- 3. 무엇을 만들었나 -->
 <section class="slide" data-no="2">
-  <h2>① 입력에서 출력까지 — 한 화면에서 끝나는 검수 흐름</h2>
+  <h2><span class="axis">1</span>입력에서 출력까지 — 한 화면에서 끝나는 검수 흐름</h2>
   <div class="flow">
     <div class="step"><b>입력</b><div class="d">CSV · 수기 · PDF 공문</div></div>
+    <div class="arrow">›</div>
     <div class="step"><b>구조화</b><div class="d">9개 필드 + 원본 행 연결</div></div>
+    <div class="arrow">›</div>
     <div class="step hi"><b>탐지</b><div class="d">누락·중복·규격·단위</div></div>
+    <div class="arrow">›</div>
     <div class="step hi"><b>사람 검수</b><div class="d">수정·승인·반려·이력</div></div>
+    <div class="arrow">›</div>
     <div class="step"><b>출력</b><div class="d">승인분만 JSON·CSV</div></div>
   </div>
   <p class="small mute" style="margin-bottom:5mm">가운데 두 단계가 이 제품의 핵심입니다. 앞뒤는 그 두 단계를 위한 준비와 마무리입니다.</p>
@@ -277,8 +355,8 @@ PDF   <span class="y">가온푸드_단가변경공문.pdf · 1쪽</span>
 </section>
 
 <!-- 5. DOC-019·020 -->
-<section class="slide dense" data-no="4">
-  <h2>② 왜 자동 처리하면 안 되는가 — 표면 숫자가 거짓말하는 두 건</h2>
+<section class="slide dense invert" data-no="4">
+  <h2><span class="axis">2</span>왜 자동 처리하면 안 되는가 — 표면 숫자가 거짓말하는 두 건</h2>
   <div class="row" style="margin-bottom:5mm">
     <div class="col card">
       <h3>DOC-019 · 냉동돈전지 <span class="tag">단가 동결</span></h3>
@@ -289,8 +367,11 @@ PDF   <span class="y">가온푸드_단가변경공문.pdf · 1쪽</span>
           <tr><td>kg당</td><td class="num">8,600 → <b class="warn">9,556 (+11.1%)</b></td></tr>
         </tbody>
       </table>
-      <p class="small" style="margin-top:3mm">단가는 그대로인데 <b>양이 줄었습니다.</b> 숫자만 비교하는 자동 처리는
-      "변경 없음"으로 넘깁니다. <b class="warn">11% 인상을 놓칩니다.</b></p>
+      <div class="punch">
+        <span class="big">+11.1%</span>
+        <span class="cap">단가는 그대로인데<br>실제로는 오른 값</span>
+      </div>
+      <p class="small">양이 줄었기 때문입니다. 숫자만 비교하는 자동 처리는 <b>"변경 없음"</b>으로 넘깁니다.</p>
     </div>
     <div class="col card">
       <h3>DOC-020 · 고수 <span class="tag">표면상 인하</span></h3>
@@ -301,8 +382,11 @@ PDF   <span class="y">가온푸드_단가변경공문.pdf · 1쪽</span>
           <tr><td>단가</td><td class="num">28,000 → 22,000 <span class="mute">(-21%)</span></td></tr>
         </tbody>
       </table>
-      <p class="small" style="margin-top:3mm"><b>1단이 몇 kg인지 모르면 비교 자체가 불가능합니다.</b>
-      싸진 것처럼 보이지만 실제로는 알 수 없습니다. <b class="warn">공급사 확인이 필요합니다.</b></p>
+      <div class="punch">
+        <span class="big">?</span>
+        <span class="cap">1단이 몇 kg인지 모르면<br>비교 자체가 불가능</span>
+      </div>
+      <p class="small">싸진 것처럼 보이지만 알 수 없습니다. <b>공급사 확인이 필요합니다.</b></p>
     </div>
   </div>
 
@@ -315,8 +399,7 @@ PDF   <span class="y">가온푸드_단가변경공문.pdf · 1쪽</span>
     </tbody>
   </table>
   <div class="card gold">
-    <p class="small">규격 불일치(DOC-019)와 단위 불일치(DOC-020)는 위에서 본 두 건입니다.
-    <b>네 건 모두 자동으로 합치거나 승인하지 않고</b> 대기 상태로 보내며, 판단 근거가 된 원본 값을 함께 보여줍니다.
+    <p class="small"><b>네 건 모두 자동으로 합치거나 승인하지 않고</b> 대기 상태로 보내며, 판단 근거가 된 원본 값을 함께 보여줍니다.
     예외를 안고 승인하려면 <b>검수 메모에 판단 근거를 적어야</b> 승인 버튼이 열립니다 —
     창업팀 공지 <span class="mute">"아무 검토 없이 예외 상태를 승인하는 흐름은 허용하지 않습니다"</span>를 그대로 구현했습니다.</p>
   </div>
@@ -436,7 +519,7 @@ DOC-010 <span class="y">← 기준 GAON-3</span></pre>
 
 <!-- 9. 한계 -->
 <section class="slide" data-no="8">
-  <h2>⑤ 안 되는 것을 먼저 적었습니다</h2>
+  <h2><span class="axis">5</span>안 되는 것을 먼저 적었습니다</h2>
   <p class="lead" style="margin-top:0;margin-bottom:5mm">
     창업팀이 <b>"초급팀이 구현하지 못한 한계와 오류가 숨김없이 기록되는지"</b>를 평가 축으로 두었습니다.
     README에 되는 것과 나란히 적었습니다.
@@ -493,7 +576,7 @@ DOC-010 <span class="y">← 기준 GAON-3</span></pre>
 </section>
 
 <!-- 11. 블레이버스 기록 -->
-<section class="slide" data-no="10">
+<section class="slide invert" data-no="10">
   <h2>과정을 남겼습니다</h2>
   <div class="kpis" style="margin-bottom:6mm">
     <div class="kpi"><div class="v">5</div><div class="k">아젠다</div></div>
@@ -502,14 +585,14 @@ DOC-010 <span class="y">← 기준 GAON-3</span></pre>
     <div class="kpi"><div class="v">12일</div><div class="k">08.04 → 08.15</div></div>
   </div>
   <div class="row grow">
-    <div class="col card">
+    <div class="col card mid">
       <h3>기록의 방식</h3>
       <p class="small">아젠다는 <b>요건 단위</b>로, 워크는 <b>하루치 작업 단위</b>로, 태스크는 <b>한 번에 끝나는 단위</b>로 나눴습니다.
       태스크마다 실제 투입 시간을 기록하고, 산출물(검증 결과 PDF·화면 캡처·대조 문서)을 워크에 함께 올렸습니다.</p>
       <p class="small" style="margin-top:3mm">고친 결함마다 <b>왜 그렇게 고쳤는지</b>를 커밋 메시지와 문서로 남겼습니다.
       다음 사람이 되돌리려 할 때 근거를 찾을 수 있어야 하기 때문입니다.</p>
     </div>
-    <div class="col card gold">
+    <div class="col card gold mid">
       <h3>1인팀으로 12일</h3>
       <p class="small">필수 요건 7개와 추가 요건 1개를 모두 구현하고 배포까지 마쳤습니다.
       화면을 꾸미는 대신 <b>판정의 근거를 보여주는 데</b> 시간을 썼습니다.</p>
