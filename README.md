@@ -230,7 +230,8 @@ DOC-020은 규격(`기존 1kg / 변경 4단`)과 단위(`KG/단`)가 각각 독�
   "source_ref": {
     "input_method": "file",
     "file_name": "42_해커톤_업로드용_증빙20건_2026-08-04.csv",
-    "row_no": 2
+    "row_no": 2,
+    "page_no": null
   },
   "reviewed_at": "2026-08-10T14:03:00+09:00",
   "review_memo": "",
@@ -245,13 +246,15 @@ DOC-020은 규격(`기존 1kg / 변경 4단`)과 단위(`KG/단`)가 각각 독�
 |---|---|
 | `uid` | **행을 유일하게 식별하는 값.** 명세 권장안에는 없지만 덧붙였다. 문서ID는 공문이 재발송되거나 파일을 두 번 올리면 중복되므로, 받는 쪽이 이 값을 키로 쓰면 안전하다 |
 | `doc_id` | 원본 증빙 식별자. **유일하지 않을 수 있다** |
-| `source_type` | 증빙이 원래 들어온 형태(`PDF`·`XLSX`·`IMAGE`·`수기`). 표시용 값이다 |
+| `source_type` | 증빙이 원래 들어온 형태(`PDF`·`XLSX`·`IMAGE`·`수기`). **사람이 고칠 수 있는 표시용 값**이라 출처 근거로는 쓰지 않는다 |
 | `raw_item_name` / `normalized_item_name` | 공급사 표기 원문 / 정규화 후보 또는 사람이 고친 값 |
 | `price_before` / `price_after` | 인상 전·후 단가. 동결·인하도 있다 |
 | `review_status` | `new`·`needs_review`·`on_hold`·`approved`·`rejected` |
 | `exception_flags` | `missing_required`·`spec_mismatch`·`unit_mismatch`·`duplicate_suspected` 순서로 담는다 |
 | `format_errors` | 정수·날짜로 읽지 못한 필드(`field`·`value`·`reason`). 형식 오류가 있으면 승인이 막히므로 출력에서는 항상 빈 배열이다 |
-| `source_ref.row_no` | 헤더를 1행으로 세는 1-indexed 행 번호 |
+| `source_ref.input_method` | 어떤 경로로 들어왔는지. `file`·`pdf`·`manual`. `source_type`과 달리 사람이 고칠 수 없어 **출처를 되짚는 기준**이 된다 |
+| `source_ref.row_no` | 헤더를 1행으로 세는 1-indexed 행 번호. 파일 인입이 아니면 `null` |
+| `source_ref.page_no` | PDF 공문에서 읽었으면 그 표가 있던 쪽 번호. 그 밖에는 `null` |
 | `change_log` | 사람이 값을 고친 내역. 시각·필드·이전값·수정값·동작 |
 
 ### CSV 평탄화 규칙
@@ -262,7 +265,7 @@ CSV는 위 구조를 평탄화한다. 열 순서는 아래와 같고 인코딩�
 uid, doc_id, source_type, supplier_name, raw_item_name, normalized_item_name,
 spec, unit, price_before, price_after, effective_date,
 review_status, exception_flags, reviewed_at, review_memo,
-source_input_method, source_file_name, source_row_no,
+source_input_method, source_file_name, source_row_no, source_page_no,
 change_log_count, change_log_json
 ```
 
@@ -391,6 +394,10 @@ DOC-002를 반려한 상태에서 출력을 만들어 검사한다.
 깨진 PDF에 이유를 알려 주는지 확인한다. 창업팀 자료라 저장소에 없으므로,
 샘플 공문 폴더가 없으면 이 섹션은 건너뛴다.
 
+출처도 함께 고정한다. PDF로 넣은 항목이 `input_method: "pdf"`로 남고 파일명·쪽 번호를
+들고 있는지, 목록 배지가 `PDF 1쪽`·`수기`·`2행`으로 갈리는지, 승인 후 내보낸 CSV에
+파일명과 쪽 번호가 실리는지 본다. `pdf`를 `manual`로 되돌려 보면 이 검사 3개가 실패한다.
+
 최근 실행 결과는 `docs/검증결과_20건_2026-08-05.pdf`에 있다.
 
 ---
@@ -402,7 +409,7 @@ DOC-002를 반려한 상태에서 출력을 만들어 검사한다.
 - CSV 입력(UTF-8, BOM 유무 무관), RFC 4180 따옴표·이스케이프 처리
 - **화면에서 직접 등록(수기)** — 파일 인입과 같은 파이프라인을 탄다
 - **PDF 공문에서 표 읽기** — 텍스트 PDF 한정. 좌표로 표를 복원해 후보를 만든다
-- 9개 필드 구조화와 원본 파일명·행 번호 연결
+- 9개 필드 구조화와 원본 파일명·행 번호(PDF는 쪽 번호) 연결
 - 정규화 품목명 후보 생성(사전 → 규칙 → 데이터 부족)
 - 예외 4종 탐지와 사유·근거 원본 값 제공
 - 상태 5종 결정, 중복 되돌리기, 승인 차단 조건
@@ -599,6 +606,24 @@ PDF로 들어온 건만 중복 검사가 빠지는 구멍이 생긴다.
 
 실제로 가온푸드 공문을 읽어 넣은 뒤 20건 CSV를 올리면, 같은 내용인 DOC-001·009·010이
 중복 의심으로 잡힌다. 그 공문이 20건의 원본이기 때문이다.
+
+### 출처는 `pdf`로 남긴다
+
+파이프라인은 같이 타지만 **출처는 수기 등록과 구분한다.**
+
+```json
+"source_ref": { "input_method": "pdf", "file_name": "가온푸드_단가변경공문.pdf", "page_no": 1, "row_no": null }
+```
+
+사람이 추출 결과를 확인하고 고친 뒤 넣는다는 점은 수기 등록과 같다. 그래도 `manual`이
+아닌 이유는, 값의 근거가 **사람의 기억이 아니라 원본 공문**이기 때문이다. `manual`로
+뭉뚱그리면 내보낸 데이터에서 어느 공문에서 나온 인상분인지 되짚을 수 없다. CSV 행에
+파일명과 행 번호가 남는 것과 같은 이유로, PDF는 파일명과 쪽 번호를 남긴다.
+
+행 번호 자리에 쪽 번호를 쓰는 이유는 단위가 다르기 때문이다. CSV의 `row_no`는 파일의
+몇 번째 줄이지만, PDF는 줄이 아니라 표의 한 행이라 줄 번호를 붙일 수 없다. 대신 그 표가
+있던 쪽을 남긴다. 목록에는 `PDF 1쪽`, 상세에는 `파일명 · 1쪽 표에서 읽고 사람이 확인함`으로
+보이고, 내보내기에도 `source_file_name`·`source_page_no`로 함께 나간다.
 
 ---
 

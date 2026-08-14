@@ -1,4 +1,4 @@
-import type { ExceptionFlag, Item, ReviewStatus } from './types';
+import type { ExceptionFlag, Item, ReviewStatus, SourceRef } from './types';
 
 /** 화면에 쓰는 한글 라벨. 내부 값은 영문 field ID를 그대로 쓴다. */
 export const STATUS_LABEL: Record<ReviewStatus, string> = {
@@ -77,6 +77,18 @@ export function summarizeFlags(flags: ExceptionFlag[], max = 2): string {
   const shown = flags.slice(0, max).map((f) => FLAG_LABEL[f]);
   const rest = flags.length - shown.length;
   return rest > 0 ? `${shown.join(', ')} +${rest}` : shown.join(', ');
+}
+
+/**
+ * 목록의 문서ID 옆에 붙는 출처 배지.
+ *
+ * 어디서 온 값인지 한눈에 구분되어야 한다. 파일이면 몇 행인지가 가장 쓸모 있고,
+ * PDF와 수기는 행 번호가 없으므로 경로 자체를 보여준다.
+ */
+export function sourceBadge(ref: SourceRef): string {
+  if (ref.input_method === 'file') return `${ref.row_no}행`;
+  if (ref.input_method === 'pdf') return ref.page_no ? `PDF ${ref.page_no}쪽` : 'PDF';
+  return '수기';
 }
 
 /** 필드 한글명. 상세 화면의 관찰값/수정값 표에 쓴다. */

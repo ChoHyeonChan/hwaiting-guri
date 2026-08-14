@@ -17,7 +17,11 @@ const FILL_BY_HAND = ['문서ID', '공급사'] as const;
 export function PdfImportPanel({
   onRegister,
 }: {
-  onRegister: (rows: Record<string, string>[]) => void;
+  /** 쪽 번호와 파일명을 함께 넘긴다. 목록에서 어느 공문 몇 쪽인지 되짚을 수 있어야 한다 */
+  onRegister: (
+    rows: { values: Record<string, string>; pageNo: number }[],
+    fileName: string,
+  ) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -47,13 +51,17 @@ export function PdfImportPanel({
     const chosen = drafts.filter((d) => d.selected);
     onRegister(
       chosen.map((d, i) => ({
-        ...d.values,
-        // 문서ID를 비워 두면 필수값 누락으로 잡힌다. 여러 건이면 뒤에 번호를 붙인다.
-        '문서ID': common['문서ID']
-          ? chosen.length > 1 ? `${common['문서ID']}-${i + 1}` : common['문서ID']
-          : '',
-        '공급사': common['공급사'],
+        values: {
+          ...d.values,
+          // 문서ID를 비워 두면 필수값 누락으로 잡힌다. 여러 건이면 뒤에 번호를 붙인다.
+          '문서ID': common['문서ID']
+            ? chosen.length > 1 ? `${common['문서ID']}-${i + 1}` : common['문서ID']
+            : '',
+          '공급사': common['공급사'],
+        },
+        pageNo: d.page,
       })),
+      fileName,
     );
     setResult(null);
     setDrafts([]);

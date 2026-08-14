@@ -73,6 +73,17 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
               <b>{item.source_ref.row_no}행</b>
               <span className="text-slate-400"> (헤더 포함)</span>
             </>
+          ) : item.source_ref.input_method === 'pdf' ? (
+            <>
+              <span className="font-mono">{item.source_ref.file_name}</span>
+              {item.source_ref.page_no !== null && (
+                <>
+                  {' · '}
+                  <b>{item.source_ref.page_no}쪽</b>
+                </>
+              )}
+              <span className="text-slate-400"> 표에서 읽고 사람이 확인함</span>
+            </>
           ) : (
             '화면에서 직접 입력'
           )}

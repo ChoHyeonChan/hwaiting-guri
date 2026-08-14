@@ -92,11 +92,19 @@ export interface FormatError {
 }
 
 export interface SourceRef {
-  input_method: 'file' | 'manual';
-  /** 수기 입력이면 null */
+  /**
+   * 어떤 경로로 들어왔는지.
+   *
+   * PDF는 사람이 추출 결과를 확인한 뒤 넣지만 `manual`이 아니다. 값의 출처가
+   * 사람의 기억이 아니라 원본 문서라서, 어느 공문 몇 쪽인지 되짚을 수 있어야 한다.
+   */
+  input_method: 'file' | 'manual' | 'pdf';
+  /** 수기 입력이면 null. CSV면 파일명, PDF면 그 PDF 이름 */
   file_name: string | null;
-  /** 헤더를 1행으로 세는 1-indexed 행 번호. 수기 입력이면 null */
+  /** 헤더를 1행으로 세는 1-indexed 행 번호. 파일 인입이 아니면 null */
   row_no: number | null;
+  /** PDF에서 읽었으면 그 표가 있던 쪽 번호. 그 밖에는 null */
+  page_no: number | null;
   /** 몇 번째 인입인지. 같은 파일을 다시 올리면 2가 된다. 1부터 */
   batch_no: number;
   /**

@@ -4,7 +4,7 @@ import type { Filters, LoadState } from '@/lib/store';
 import { effectiveFlags } from '@/lib/pipeline';
 import {
   FLAG_LABEL, FLAG_ORDER, FLAG_STYLE, FORMAT_ERROR_LABEL, FORMAT_ERROR_STYLE,
-  STATUS_LABEL, STATUS_ORDER, STATUS_STYLE,
+  STATUS_LABEL, STATUS_ORDER, STATUS_STYLE, sourceBadge,
 } from '@/lib/labels';
 import type { ExceptionFlag, Item, ReviewStatus } from '@/lib/types';
 
@@ -142,7 +142,7 @@ export function InboxTable({
                     <Td>
                       <span className="font-mono text-xs">{item.doc_id}</span>
                       <span className="ml-1 text-[10px] text-slate-400">
-                        {item.source_ref.row_no ? `${item.source_ref.row_no}행` : '수기'}
+                        {sourceBadge(item.source_ref)}
                       </span>
                     </Td>
                     <Td>{item.current.supplier_name}</Td>

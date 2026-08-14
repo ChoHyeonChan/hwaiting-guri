@@ -37,6 +37,8 @@ export interface ExportRow {
     input_method: string;
     file_name: string | null;
     row_no: number | null;
+    /** PDF 공문에서 읽었으면 그 쪽 번호. 원본을 되짚는 근거다 */
+    page_no: number | null;
   };
   reviewed_at: string | null;
   review_memo: string;
@@ -130,6 +132,7 @@ export function buildExport(items: Item[]): ExportResult {
         input_method: item.source_ref.input_method,
         file_name: item.source_ref.file_name,
         row_no: item.source_ref.row_no,
+        page_no: item.source_ref.page_no,
       },
       reviewed_at: item.reviewed_at,
       review_memo: item.review_memo,
@@ -168,7 +171,7 @@ export const CSV_COLUMNS = [
   'uid', 'doc_id', 'source_type', 'supplier_name', 'raw_item_name', 'normalized_item_name',
   'spec', 'unit', 'price_before', 'price_after', 'effective_date',
   'review_status', 'exception_flags', 'reviewed_at', 'review_memo',
-  'source_input_method', 'source_file_name', 'source_row_no',
+  'source_input_method', 'source_file_name', 'source_row_no', 'source_page_no',
   'change_log_count', 'change_log_json',
 ] as const;
 
@@ -209,6 +212,7 @@ export function toCsv(rows: ExportRow[]): string {
       source_input_method: row.source_ref.input_method,
       source_file_name: row.source_ref.file_name ?? '',
       source_row_no: row.source_ref.row_no === null ? '' : String(row.source_ref.row_no),
+      source_page_no: row.source_ref.page_no === null ? '' : String(row.source_ref.page_no),
       change_log_count: String(row.change_log.length),
       change_log_json: row.change_log.length === 0 ? '' : JSON.stringify(row.change_log),
     };

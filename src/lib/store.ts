@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseEvidenceCsv, CsvParseError } from './parseCsv';
-import { addManualItem, addManualItems, buildItems, effectiveFlags, recomputeItems, restoreItems } from './pipeline';
+import { addManualItem, addPdfItems, buildItems, effectiveFlags, recomputeItems, restoreItems } from './pipeline';
 import * as review from './review';
 import { SAMPLE_CSV, SAMPLE_FILE_NAME } from './sampleData';
 import type { CurrentFields, ExceptionFlag, Item, ReviewStatus } from './types';
@@ -258,12 +258,16 @@ export function useInbox() {
    *
    * 파일·수기 등록과 같은 파이프라인을 탄다. 읽어 온 값이라고 판정을 건너뛰면
    * PDF로 들어온 건만 중복 검사가 빠지는 구멍이 생긴다.
+   * 출처는 PDF 파일명과 쪽 번호로 남겨, 나중에 원본 공문을 되짚을 수 있게 한다.
    */
-  const addExtracted = useCallback((rows: Record<string, string>[]) => {
+  const addExtracted = useCallback((
+    rows: { values: Record<string, string>; pageNo: number }[],
+    fileName: string,
+  ) => {
     if (rows.length === 0) return;
     setData((prev) => {
       const batchNo = prev.batchCount + 1;
-      const items = addManualItems(rows, prev.items, batchNo);
+      const items = addPdfItems(rows, fileName, prev.items, batchNo);
       const incoming = items.slice(prev.items.length);
       return {
         ...prev,

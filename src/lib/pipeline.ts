@@ -22,8 +22,16 @@ export interface IntakeContext {
   /** 이미 인입된 항목 수. 새 항목의 intake_seq는 여기서 이어진다 */
   startSeq: number;
   /** 어떻게 들어왔는지. 화면에서 직접 등록하면 파일명과 행 번호가 없다 */
-  inputMethod?: 'file' | 'manual';
+  inputMethod?: 'file' | 'manual' | 'pdf';
 }
+
+/**
+ * 파이프라인에 넣을 한 행.
+ *
+ * CSV는 파일의 한 줄이라 행 번호로 위치가 잡히지만, PDF는 표의 한 행이라
+ * 쪽 번호가 그 자리를 대신한다. `ParsedRow`를 그대로 받으면 CSV 쪽은 손댈 필요가 없다.
+ */
+export type IntakeRow = ParsedRow & { pageNo?: number };
 
 /**
  * 파싱된 행을 검수 대상 Item으로 만들어 **기존 목록 뒤에 이어 붙인다**.
@@ -34,7 +42,7 @@ export interface IntakeContext {
  * 잡으려면 새 인입분이 기존 항목과 비교돼야 한다.
  */
 export function buildItems(
-  rows: ParsedRow[],
+  rows: IntakeRow[],
   fileName: string | null,
   existing: Item[] = [],
   ctx: IntakeContext = { batchNo: 1, startSeq: 0 },
@@ -87,12 +95,39 @@ export function addManualItems(
   });
 }
 
+/**
+ * PDF 공문에서 읽은 표의 행들을 목록에 더한다.
+ *
+ * 파일·수기와 **같은 파이프라인**을 타되 출처만 다르게 남긴다. 사람이 추출 결과를
+ * 확인하고 고친 뒤 넣는다는 점은 수기 등록과 같지만, 값의 근거는 사람의 기억이 아니라
+ * 원본 공문이다. 이걸 `manual`로 뭉뚱그리면 내보낸 데이터에서 "어느 공문에서 나왔는지"를
+ * 되짚을 수 없다. CSV 행에 파일명과 행 번호가 남는 것과 같은 이유로 파일명과 쪽 번호를 남긴다.
+ */
+export function addPdfItems(
+  rows: { values: Record<string, string>; pageNo: number }[],
+  fileName: string,
+  existing: Item[] = [],
+  batchNo = 1,
+): Item[] {
+  const parsed: IntakeRow[] = rows.map((row) => ({
+    rowNo: 0,
+    values: row.values,
+    raw: '',
+    pageNo: row.pageNo,
+  }));
+  return buildItems(parsed, fileName, existing, {
+    batchNo,
+    startSeq: existing.length,
+    inputMethod: 'pdf',
+  });
+}
+
 function buildItem(
-  row: ParsedRow,
+  row: IntakeRow,
   fileName: string | null,
   batchNo: number,
   intakeSeq: number,
-  inputMethod: 'file' | 'manual',
+  inputMethod: 'file' | 'manual' | 'pdf',
 ): Item {
   const observed = {} as ItemFields;
   let docId = '';
@@ -112,12 +147,14 @@ function buildItem(
     doc_id: docId,
     source_ref: {
       input_method: inputMethod,
-      // 수기 등록은 파일의 한 행이 아니므로 파일명과 행 번호를 남기지 않는다.
-      // 이 값이 비어 있는 것 자체가 "사람이 직접 넣었다"는 근거가 된다.
+      // 수기 등록만 원본 문서가 없다. 이 값이 비어 있는 것 자체가
+      // "사람이 직접 넣었다"는 근거가 된다. CSV와 PDF는 둘 다 파일명을 남긴다.
       file_name: inputMethod === 'manual' ? null : fileName,
-      row_no: inputMethod === 'manual' ? null : row.rowNo,
+      // 행 번호는 CSV 파일의 줄 번호다. PDF는 줄이 아니라 표의 행이라 쪽 번호로 남긴다.
+      row_no: inputMethod === 'file' ? row.rowNo : null,
+      page_no: inputMethod === 'pdf' ? (row.pageNo ?? null) : null,
       batch_no: batchNo,
-      raw_line: inputMethod === 'manual' ? '' : row.raw,
+      raw_line: inputMethod === 'file' ? row.raw : '',
     },
     observed,
     current: { ...observed, normalized_item_name: normalization.candidate },
@@ -156,7 +193,11 @@ function buildItem(
 export function restoreItems(items: Item[]): Item[] {
   return items.map((item) => ({
     ...item,
-    source_ref: { ...item.source_ref, raw_line: item.source_ref.raw_line ?? '' },
+    source_ref: {
+      ...item.source_ref,
+      raw_line: item.source_ref.raw_line ?? '',
+      page_no: item.source_ref.page_no ?? null,
+    },
   }));
 }
 

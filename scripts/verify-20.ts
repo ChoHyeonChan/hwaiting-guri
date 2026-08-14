@@ -13,7 +13,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseEvidenceCsv, type ParsedRow } from '../src/lib/parseCsv';
-import { addManualItem, addManualItems, buildItems, canApprove, recomputeItems, restoreItems } from '../src/lib/pipeline';
+import { addManualItem, addPdfItems, buildItems, canApprove, recomputeItems, restoreItems } from '../src/lib/pipeline';
+import { sourceBadge } from '../src/lib/labels';
 import {
   approve as reviewApprove,
   editField as reviewEdit,
@@ -1029,18 +1030,69 @@ async function main() {
     console.log(`  단가에서 콤마와 "원"을 떼고 그대로 쓸 수 있는가: ${cleanOk ? 'PASS' : 'FAIL'}`);
 
     // 읽어 온 항목도 같은 파이프라인을 타는지. 별도 경로를 만들면 중복 검사가 빠진다.
-    const viaPdf = addManualItems(
-      gaon.rows.map((r) => ({ ...r.values, '문서ID': 'PDF-001', '공급사': '가온푸드(예시)' })),
+    const viaPdf = addPdfItems(
+      gaon.rows.map((r, i) => ({
+        // 화면과 같은 값을 넣는다. 원본유형은 패널이 'PDF'로 채우고,
+        // 문서ID는 여러 건이면 뒤에 번호가 붙는다.
+        values: {
+          ...r.values,
+          '원본유형': 'PDF',
+          '문서ID': `PDF-001-${i + 1}`,
+          '공급사': '가온푸드(예시)',
+        },
+        pageNo: r.page,
+      })),
+      'gaon.pdf',
       [],
       1,
     );
     const pipelineOk =
       check('pdfPipeline', String(viaPdf.length), '3') &&
-      check('pdfNorm', viaPdf[0].normalization.source, 'dictionary') &&
-      check('pdfMethod', viaPdf[0].source_ref.input_method, 'manual');
+      check('pdfNorm', viaPdf[0].normalization.source, 'dictionary');
     console.log('');
-    console.log(`  읽은 3건을 목록에 넣음 -> ${viaPdf.length}건 · 정규화 ${viaPdf[0].normalization.source} · 출처 ${viaPdf[0].source_ref.input_method}  ${pipelineOk ? 'PASS' : 'FAIL'}`);
+    console.log(`  읽은 3건을 목록에 넣음 -> ${viaPdf.length}건 · 정규화 ${viaPdf[0].normalization.source}  ${pipelineOk ? 'PASS' : 'FAIL'}`);
     console.log('    -> 파일·수기 등록과 같은 판정을 거친다. 읽어 왔다고 검사를 건너뛰지 않는다.');
+
+    // 출처를 'manual'로 뭉뚱그리면 어느 공문에서 나왔는지 되짚을 수 없다.
+    // CSV 행에 파일명·행 번호가 남는 것과 같은 이유로 PDF는 파일명·쪽 번호를 남긴다.
+    const ref = viaPdf[0].source_ref;
+    const refOk =
+      check('pdfRefMethod', ref.input_method, 'pdf') &&
+      check('pdfRefFile', String(ref.file_name), 'gaon.pdf') &&
+      check('pdfRefPage', String(ref.page_no), '1') &&
+      check('pdfRefRow', String(ref.row_no), 'null');
+    console.log('');
+    console.log(
+      `  출처 기록: input_method=${ref.input_method} file_name=${ref.file_name} page_no=${ref.page_no} row_no=${ref.row_no}  ${refOk ? 'PASS' : 'FAIL'}`,
+    );
+    console.log('    -> 수기 등록과 구분된다. 값의 근거가 사람의 기억이 아니라 원본 공문이다.');
+
+    // 화면 배지도 같은 근거를 보여야 한다. 목록에 "수기"라고 뜨면 사실과 다르다.
+    const badgeOk =
+      check('pdfBadge', sourceBadge(ref), 'PDF 1쪽') &&
+      check('manualBadge', sourceBadge(normal.added.source_ref), '수기') &&
+      check('fileBadge', sourceBadge(items[0].source_ref), '2행');
+    console.log(
+      `  목록 배지: PDF="${sourceBadge(ref)}" 수기="${sourceBadge(normal.added.source_ref)}" 파일="${sourceBadge(items[0].source_ref)}"  ${badgeOk ? 'PASS' : 'FAIL'}`,
+    );
+
+    // 내보내기까지 살아남아야 근거가 된다. 화면에만 있으면 받는 쪽은 알 수 없다.
+    const pdfApproved = viaPdf.map((i, idx) => (idx === 0 ? reviewApprove(i, AT) : i));
+    const pdfExport = buildExport(pdfApproved);
+    const pdfRow = pdfExport.rows[0];
+    const pdfCsvCells = parseCsvCells(toCsv(pdfExport.rows));
+    const pageCol = CSV_COLUMNS.indexOf('source_page_no');
+    const fileCol = CSV_COLUMNS.indexOf('source_file_name');
+    const exportRefOk =
+      check('pdfExportMethod', String(pdfRow?.source_ref.input_method), 'pdf') &&
+      check('pdfExportPage', String(pdfRow?.source_ref.page_no), '1') &&
+      check('pdfCsvPage', pdfCsvCells[1]?.[pageCol] ?? '', '1') &&
+      check('pdfCsvFile', pdfCsvCells[1]?.[fileCol] ?? '', 'gaon.pdf');
+    console.log('');
+    console.log(
+      `  승인 후 내보내기: input_method=${pdfRow?.source_ref.input_method} file_name=${pdfCsvCells[1]?.[fileCol]} page_no=${pdfCsvCells[1]?.[pageCol]}  ${exportRefOk ? 'PASS' : 'FAIL'}`,
+    );
+    console.log('    -> 받는 쪽이 "이 인상분은 이 공문 몇 쪽에서 나왔다"를 되짚을 수 있다.');
 
     // 스캔 PDF는 지원하지 않는다. 글자가 없으면 그 사실을 알려야 한다.
     const emptyPdf = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'broken.pdf', {
