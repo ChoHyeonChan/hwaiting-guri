@@ -882,13 +882,41 @@ console.log('');
 console.log(`  예외 4종이 모두 나오는가: ${[...sampleFlags].sort().join(', ')}  ${allFour ? 'PASS' : 'FAIL'}`);
 console.log(`  형식 오류도 포함되는가: ${hasFormat ? 'PASS' : 'FAIL'} (SMP-008 "추후 안내")`);
 
-// 창업팀 자료를 앱에 넣지 않았는지 확인한다(규정 4번)
-const leaked = ['DOC-0', '가온푸드', '새봄식품', '바다원', '푸른포장', '한결유통', '토마토살사']
-  .filter((needle) => SAMPLE_CSV.includes(needle));
+// 창업팀 자료가 앱에 섞이지 않았는지 확인한다(규정 4번).
+//
+// 예시 데이터를 만들 때 샘플 공문을 보면서 쓰다 보니 품목명과 단가가 그대로
+// 들어간 적이 있다. 배포 URL은 공개 접근이라 창업팀 자료를 실어 두는 셈이 된다.
+// 눈으로 훑어서는 놓치므로 20건 원본과 기계적으로 대조한다.
+const teamItems = new Set(parsed.rows.map((r) => r.values['원문 품목명'].trim()));
+const teamPrices = new Set(
+  parsed.rows.flatMap((r) => [r.values['기존단가(원)'].trim(), r.values['변경단가(원)'].trim()]),
+);
+// 샘플 공문(PDF·PNG)은 코드에서 읽을 수 없어 확인한 값을 적어 둔다.
+for (const [item, before, after] of [
+  ['냉동 다진마늘', '7200', '7560'], ['양파 중', '23000', '25300'],
+  ['카놀라유', '46000', '49680'], ['냉동 닭정육', '14500', '16095'],
+  ['모짜렐라 슈레드', '24000', '27600'], ['토마토소스', '8000', '8240'],
+  ['볶음참깨', '9800', '10486'], ['냉동 감자튀김', '11000', '12100'],
+  ['청양고추', '13500', ''], ['우동면', '4200', ''],
+]) {
+  teamItems.add(item);
+  teamPrices.add(before);
+  if (after) teamPrices.add(after);
+}
+
+const sampleRows = SAMPLE_CSV.trim().split('\n').slice(1).map((l) => l.split(','));
+const leaked: string[] = [];
+for (const cols of sampleRows) {
+  const [doc, , , item, , , before, after] = cols;
+  if (teamItems.has(item)) leaked.push(`${doc} 품목 "${item}"`);
+  if (teamPrices.has(before)) leaked.push(`${doc} 기존단가 ${before}`);
+  if (teamPrices.has(after)) leaked.push(`${doc} 변경단가 ${after}`);
+}
 if (leaked.length > 0) failures += leaked.length;
 console.log('');
-console.log(`  제공 20건의 값이 섞여 있는가: ${leaked.length === 0 ? '없음 PASS' : `${leaked.join(', ')} FAIL`}`);
-console.log('    -> 창업팀 자료를 공개 URL에 싣지 않으려고 가상 데이터를 따로 만들었다.');
+console.log(`  창업팀 자료의 품목·단가가 섞여 있는가: ${leaked.length === 0 ? '0건 PASS' : `${leaked.length}건 FAIL`}`);
+leaked.forEach((l) => console.log(`    FAIL ${l}`));
+console.log('    -> 배포 URL은 공개 접근이라 창업팀 자료를 실어 두면 안 된다(규정 4번).');
 
 // 하드코딩이 아님을 같은 방식으로 증명한다: 문서ID를 바꿔도 판정이 같아야 한다
 const renamedSample = buildItems(
