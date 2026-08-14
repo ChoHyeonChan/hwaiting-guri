@@ -42,7 +42,7 @@ function priceFailure(field: 'price_before' | 'price_after', value: string): str
   if (INTEGER_PATTERN.test(digits)) return null;
 
   const label = FIELD_LABEL[field];
-  return `${label} 값 "${value}"을(를) 정수로 읽을 수 없습니다. 원 단위 숫자만 있어야 합니다(예: 32000).`;
+  return `${label} 값 "${value}"을(를) 정수로 읽을 수 없습니다. 원 단위 숫자만 있어야 합니다(예: 15000).`;
 }
 
 /** 출력 스키마에서 날짜 표기를 하나로 통일하기 위해 YYYY-MM-DD만 받는다. */
