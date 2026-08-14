@@ -17,12 +17,13 @@ interface Props {
   onReset: () => void;
   onConfirmPending: () => void;
   onCancelPending: () => void;
+  onLoadSample: () => void;
 }
 
 export function UploadPanel({
   fileName, loadState, errorMessage, warnings, total, exception,
   batchCount, lastIntake, pendingFile,
-  onLoad, onReset, onConfirmPending, onCancelPending,
+  onLoad, onReset, onConfirmPending, onCancelPending, onLoadSample,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -32,6 +33,16 @@ export function UploadPanel({
         <h2 className="text-sm font-semibold text-navy">증빙 자료 받기</h2>
         <span className="text-xs text-slate-500">CSV 파일 (UTF-8)</span>
         <div className="ml-auto flex gap-2">
+          {/* 파일이 없는 사람도 전체 흐름을 볼 수 있게 한다. 결과를 박아 둔 것이
+              아니라 내장한 CSV를 같은 파서·판정에 태운다 */}
+          <button
+            type="button"
+            onClick={onLoadSample}
+            disabled={loadState === 'loading'}
+            className="rounded-md border border-gold bg-gold-soft px-3 py-1.5 text-sm font-medium text-navy hover:bg-gold-line disabled:opacity-50"
+          >
+            예시 데이터로 바로 보기
+          </button>
           <button
             type="button"
             onClick={() => inputRef.current?.click()}

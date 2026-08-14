@@ -42,6 +42,7 @@ export default function Home() {
           onReset={inbox.reset}
           onConfirmPending={inbox.confirmPendingFile}
           onCancelPending={inbox.cancelPendingFile}
+          onLoadSample={inbox.loadSample}
         />
 
         {/* 파일 없이도 넣을 수 있는 경로. 요건 ②의 "수기 등록" */}
@@ -57,6 +58,7 @@ export default function Home() {
             counts={inbox.counts}
             selectedId={inbox.selectedId}
             onSelect={inbox.setSelectedId}
+            onLoadSample={inbox.loadSample}
           />
           <ItemDetail
             item={inbox.selected}

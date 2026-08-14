@@ -5,6 +5,14 @@ export interface ParsedRow {
   rowNo: number;
   /** 한글 컬럼명 -> 값 */
   values: Record<string, string>;
+  /**
+   * 그 행의 CSV 원문.
+   *
+   * 값은 공백을 다듬고 따옴표를 푼 뒤라 원문과 다르다. 검수 담당자가
+   * "파일에 실제로 뭐라고 적혀 있었는지"를 확인할 수 있어야 근거가 되므로
+   * 손대지 않은 한 줄을 그대로 들고 있는다. 수기 등록이면 빈 문자열이다.
+   */
+  raw: string;
 }
 
 export interface ParseResult {
@@ -30,26 +38,41 @@ export function stripBom(text: string): string {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
+export interface ParsedTable {
+  /** 행별 셀 목록 */
+  cells: string[][];
+  /** 같은 인덱스 행의 원문. 따옴표 안 줄바꿈이 있으면 여러 줄일 수 있다 */
+  raws: string[];
+}
+
 /**
  * RFC 4180 기준 CSV 파서.
  * 따옴표 안의 쉼표·줄바꿈·이스케이프된 따옴표를 처리한다.
+ *
+ * 셀 값과 함께 각 행의 원문도 돌려준다. 따옴표 안에 줄바꿈이 들어 있으면
+ * 논리적 한 행이 물리적 여러 줄이 되므로, 원문을 뒤에서 다시 자를 수 없다.
+ * 파싱하면서 행의 시작과 끝 위치를 같이 기억해 두어야 한다.
  */
-export function parseCsvText(text: string): string[][] {
+export function parseCsvText(text: string): ParsedTable {
   const rows: string[][] = [];
+  const raws: string[] = [];
   let row: string[] = [];
   let field = '';
   let inQuotes = false;
   let i = 0;
+  let rowStart = 0;
 
   const pushField = () => {
     row.push(field);
     field = '';
   };
-  const pushRow = () => {
+  const pushRow = (end: number) => {
     row.push(field);
     field = '';
     rows.push(row);
     row = [];
+    raws.push(text.slice(rowStart, end).replace(/\r$/, ''));
+    rowStart = end + 1;
   };
 
   while (i < text.length) {
@@ -86,7 +109,7 @@ export function parseCsvText(text: string): string[][] {
       continue;
     }
     if (ch === '\n') {
-      pushRow();
+      pushRow(i);
       i += 1;
       continue;
     }
@@ -99,9 +122,14 @@ export function parseCsvText(text: string): string[][] {
     throw new CsvParseError('따옴표가 닫히지 않았습니다. 파일 형식을 확인해 주세요.');
   }
   // 마지막 줄에 개행이 없을 수 있다
-  if (field !== '' || row.length > 0) pushRow();
+  if (field !== '' || row.length > 0) pushRow(text.length);
 
-  return rows.filter((r) => r.some((c) => c.trim() !== ''));
+  // 빈 줄은 버리되 원문 배열의 인덱스가 어긋나지 않게 함께 걸러낸다.
+  const keep = rows.map((r) => r.some((c) => c.trim() !== ''));
+  return {
+    cells: rows.filter((_, idx) => keep[idx]),
+    raws: raws.filter((_, idx) => keep[idx]),
+  };
 }
 
 /**
@@ -111,7 +139,7 @@ export function parseCsvText(text: string): string[][] {
  */
 export function parseEvidenceCsv(rawText: string): ParseResult {
   const text = stripBom(rawText);
-  const table = parseCsvText(text);
+  const { cells: table, raws } = parseCsvText(text);
 
   if (table.length === 0) {
     throw new CsvParseError('빈 파일입니다.');
@@ -144,7 +172,7 @@ export function parseEvidenceCsv(rawText: string): ParseResult {
       values[h] = (cells[idx] ?? '').trim();
     });
 
-    rows.push({ rowNo, values });
+    rows.push({ rowNo, values, raw: raws[r] ?? '' });
   }
 
   return { rows, headers, warnings };

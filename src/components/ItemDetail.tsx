@@ -77,6 +77,18 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
             '화면에서 직접 입력'
           )}
         </p>
+
+        {/* 파일에 실제로 적혀 있던 한 줄. 관찰값은 공백을 다듬은 뒤라 원문과 다를 수 있다 */}
+        {item.source_ref.raw_line !== '' && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs text-slate-500 hover:text-navy">
+              원본 행 원문 보기
+            </summary>
+            <pre className="mt-1 overflow-x-auto rounded border border-slate-200 bg-slate-50 px-2 py-1.5 font-mono text-[11px] text-slate-700">
+              {item.source_ref.raw_line}
+            </pre>
+          </details>
+        )}
       </div>
 
       {/* 형식 오류: 값은 있는데 정수·날짜로 읽지 못한 경우. 예외 4종과 분리해서 보여준다 */}

@@ -66,8 +66,8 @@ export function addManualItem(
   existing: Item[] = [],
   batchNo = 1,
 ): Item[] {
-  // 수기 입력은 파일의 행이 아니므로 rowNo는 쓰이지 않는다.
-  const row: ParsedRow = { rowNo: 0, values };
+  // 수기 입력은 파일의 행이 아니므로 rowNo와 원문은 쓰이지 않는다.
+  const row: ParsedRow = { rowNo: 0, values, raw: '' };
   return buildItems([row], null, existing, {
     batchNo,
     startSeq: existing.length,
@@ -105,6 +105,7 @@ function buildItem(
       file_name: inputMethod === 'manual' ? null : fileName,
       row_no: inputMethod === 'manual' ? null : row.rowNo,
       batch_no: batchNo,
+      raw_line: inputMethod === 'manual' ? '' : row.raw,
     },
     observed,
     current: { ...observed, normalized_item_name: normalization.candidate },

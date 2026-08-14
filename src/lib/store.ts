@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseEvidenceCsv, CsvParseError } from './parseCsv';
 import { addManualItem, buildItems, effectiveFlags, recomputeItems } from './pipeline';
 import * as review from './review';
+import { SAMPLE_CSV, SAMPLE_FILE_NAME } from './sampleData';
 import type { CurrentFields, ExceptionFlag, Item, ReviewStatus } from './types';
 
 /**
@@ -215,6 +216,16 @@ export function useInbox() {
   );
 
   /**
+   * 내장한 예시 데이터를 넣는다.
+   *
+   * 파일 선택과 완전히 같은 경로다. 문자열을 파서에 넣고 commit을 태우므로
+   * 판정은 실행 시점에 데이터에서 계산된다. 결과를 미리 넣어 두지 않는다.
+   */
+  const loadSample = useCallback(() => {
+    commit(SAMPLE_FILE_NAME, SAMPLE_CSV);
+  }, [commit]);
+
+  /**
    * 화면에서 직접 등록한다. 파일 인입과 같은 파이프라인을 탄다.
    * 인입 횟수(batchCount)도 함께 올려, 기존 항목과 다른 배치로 구분되게 한다.
    */
@@ -341,7 +352,7 @@ export function useInbox() {
     filters: data.filters,
     selectedId: data.selectedId,
     filtered, counts, selected,
-    setFilters, setSelectedId, load, reset, addManual,
+    setFilters, setSelectedId, load, reset, addManual, loadSample,
     pendingFile, confirmPendingFile, cancelPendingFile,
     lastIntake: data.lastIntake, batchCount: data.batchCount,
     ...actions,

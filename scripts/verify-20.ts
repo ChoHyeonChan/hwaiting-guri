@@ -22,6 +22,7 @@ import {
   toggleDuplicateDismissed as reviewDismiss,
 } from '../src/lib/review';
 import { buildExport, toCsv, toJson, CSV_COLUMNS } from '../src/lib/exportData';
+import { SAMPLE_CSV, SAMPLE_FILE_NAME } from '../src/lib/sampleData';
 import type { ExceptionFlag, ReviewStatus } from '../src/lib/types';
 
 /**
@@ -225,6 +226,7 @@ console.log('='.repeat(72));
 const renamedRows: ParsedRow[] = parsed.rows.map((row, idx) => ({
   rowNo: row.rowNo,
   values: { ...row.values, '문서ID': `EVD-${String(100 + idx).padStart(3, '0')}` },
+  raw: row.raw,
 }));
 const renamed = buildItems(renamedRows, 'renamed.csv');
 
@@ -837,6 +839,79 @@ const untouched = normal.items
 if (untouched > 0) failures += untouched;
 console.log('');
 console.log(`  수기 등록 후 기존 20건 판정 변화: ${untouched}건  ${untouched === 0 ? 'PASS' : 'FAIL'}`);
+
+// -------------------------------------------------- 11차: 예시 데이터
+console.log('');
+console.log('='.repeat(72));
+console.log('11. 내장 예시 데이터 (심사용 진입 경로)');
+console.log('='.repeat(72));
+console.log('창업팀: "결과 화면이 고정값(하드코딩)이거나 스텁 응답인 경우 인정되지 않습니다."');
+console.log('예시 데이터는 결과를 박아 둔 것이 아니라 같은 파서와 판정을 거친다.');
+console.log('');
+
+const sampleParsed = parseEvidenceCsv(SAMPLE_CSV);
+const sampleItems = buildItems(sampleParsed.rows, SAMPLE_FILE_NAME);
+
+/** 예시 데이터에 담아 둔 경우. 판정이 아니라 "이런 데이터를 넣었다"는 기록이다 */
+const SAMPLE_EXPECTED: Record<string, ExceptionFlag[]> = {
+  'SMP-004': ['spec_mismatch'],
+  'SMP-005': ['unit_mismatch'],
+  'SMP-006': ['missing_required'],
+  'SMP-007': ['duplicate_suspected'],
+};
+
+console.log(['문서ID', '탐지 플래그', '형식오류', '상태', '판정'].map((h, i) => pad(h, [10, 24, 10, 14, 6][i])).join(''));
+console.log('-'.repeat(72));
+for (const item of sampleItems) {
+  const expected = SAMPLE_EXPECTED[item.doc_id] ?? [];
+  const ok = check('sample', sorted(item.exception_flags), sorted(expected));
+  console.log(
+    pad(item.doc_id, 10) +
+      pad(sorted(item.exception_flags), 24) +
+      pad(`${item.format_errors.length}건`, 10) +
+      pad(item.review_status, 14) +
+      (ok ? 'PASS' : 'FAIL'),
+  );
+}
+
+// 예외 4종이 전부 나와야 심사자가 한 번에 확인할 수 있다
+const sampleFlags = new Set(sampleItems.flatMap((i) => i.exception_flags));
+const allFour = check('sampleAllFour', String(sampleFlags.size), '4');
+const hasFormat = check('sampleFormat', String(sampleItems.some((i) => i.format_errors.length > 0)), 'true');
+console.log('');
+console.log(`  예외 4종이 모두 나오는가: ${[...sampleFlags].sort().join(', ')}  ${allFour ? 'PASS' : 'FAIL'}`);
+console.log(`  형식 오류도 포함되는가: ${hasFormat ? 'PASS' : 'FAIL'} (SMP-008 "추후 안내")`);
+
+// 창업팀 자료를 앱에 넣지 않았는지 확인한다(규정 4번)
+const leaked = ['DOC-0', '가온푸드', '새봄식품', '바다원', '푸른포장', '한결유통', '토마토살사']
+  .filter((needle) => SAMPLE_CSV.includes(needle));
+if (leaked.length > 0) failures += leaked.length;
+console.log('');
+console.log(`  제공 20건의 값이 섞여 있는가: ${leaked.length === 0 ? '없음 PASS' : `${leaked.join(', ')} FAIL`}`);
+console.log('    -> 창업팀 자료를 공개 URL에 싣지 않으려고 가상 데이터를 따로 만들었다.');
+
+// 하드코딩이 아님을 같은 방식으로 증명한다: 문서ID를 바꿔도 판정이 같아야 한다
+const renamedSample = buildItems(
+  sampleParsed.rows.map((row, idx) => ({
+    ...row,
+    values: { ...row.values, '문서ID': `ZZZ-${900 + idx}` },
+  })),
+  'renamed-sample.csv',
+);
+const sampleStable = sampleItems.every(
+  (item, idx) => sorted(item.exception_flags) === sorted(renamedSample[idx].exception_flags),
+);
+if (!sampleStable) failures += 1;
+console.log('');
+console.log(`  예시 데이터도 문서ID를 바꾸면 판정이 같은가: ${sampleStable ? 'PASS' : 'FAIL'}`);
+console.log('    -> 예시 화면 역시 데이터에서 계산된다. 미리 넣어 둔 결과가 아니다.');
+
+// 원본 행 원문이 보관되는가 (정성 평가 2번: 원본 행 근거)
+const rawKept = sampleItems.every((i) => i.source_ref.raw_line.includes(i.doc_id));
+if (!rawKept) failures += 1;
+console.log('');
+console.log(`  각 항목이 원본 CSV 한 줄을 들고 있는가: ${rawKept ? 'PASS' : 'FAIL'}`);
+console.log(`    예) ${sampleItems[3].source_ref.raw_line}`);
 
 // ---------------------------------------------------------------- 결과
 console.log('');

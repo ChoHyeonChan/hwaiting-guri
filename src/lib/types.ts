@@ -99,6 +99,13 @@ export interface SourceRef {
   row_no: number | null;
   /** 몇 번째 인입인지. 같은 파일을 다시 올리면 2가 된다. 1부터 */
   batch_no: number;
+  /**
+   * 그 행의 CSV 원문. 수기 입력이면 빈 문자열이다.
+   *
+   * 화면에 보여줄 검수 근거다. 관찰값은 공백을 다듬고 따옴표를 푼 뒤라
+   * "파일에 실제로 뭐라고 적혀 있었는지"와 다를 수 있다.
+   */
+  raw_line: string;
 }
 
 export interface ChangeLogEntry {

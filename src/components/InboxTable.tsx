@@ -21,10 +21,12 @@ interface Props {
   selectedId: string | null;
   /** 인자는 uid다. 문서ID는 재업로드로 중복된다 */
   onSelect: (uid: string) => void;
+  /** 빈 상태에서 바로 시작할 수 있게 하는 경로 */
+  onLoadSample?: () => void;
 }
 
 export function InboxTable({
-  items, filtered, loadState, filters, setFilters, counts, selectedId, onSelect,
+  items, filtered, loadState, filters, setFilters, counts, selectedId, onSelect, onLoadSample,
 }: Props) {
   const hasFilter = filters.status !== 'all' || filters.flag !== 'all';
 
@@ -64,12 +66,30 @@ export function InboxTable({
       {/* loading */}
       {loadState === 'loading' && <Placeholder>파일을 읽고 있습니다…</Placeholder>}
 
-      {/* empty - 아직 아무것도 안 올린 상태 */}
+      {/* empty - 아직 아무것도 안 올린 상태.
+          처음 들어온 사람이 가장 먼저 보는 화면이라 여기서 바로 시작할 수 있게 한다 */}
       {loadState !== 'loading' && items.length === 0 && (
         <Placeholder>
           아직 받은 자료가 없습니다.
           <br />
-          <span className="text-xs">위에서 증빙 CSV 파일을 선택하면 검수 목록이 만들어집니다.</span>
+          <span className="text-xs">
+            증빙 CSV 파일을 선택하거나, 화면에서 직접 등록하면 검수 목록이 만들어집니다.
+          </span>
+          {onLoadSample && (
+            <>
+              <br />
+              <button
+                type="button"
+                onClick={onLoadSample}
+                className="mt-3 rounded-md border border-gold bg-gold-soft px-3 py-1.5 text-xs font-medium text-navy hover:bg-gold-line"
+              >
+                예시 데이터로 바로 보기
+              </button>
+              <span className="mt-1.5 block text-[11px] text-slate-400">
+                파일이 없어도 예외 4종 탐지부터 내보내기까지 전체 흐름을 확인할 수 있습니다
+              </span>
+            </>
+          )}
         </Placeholder>
       )}
 
