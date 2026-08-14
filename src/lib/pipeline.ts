@@ -135,6 +135,20 @@ function buildItem(
 }
 
 /**
+ * 저장해 둔 항목을 복원할 때 빠진 필드를 채운다.
+ *
+ * 나중에 추가한 필드는 예전 백업에 없다. 표시 전용 필드 하나 때문에 검수하던
+ * 승인과 메모를 통째로 버릴 이유가 없으므로, 판정에 영향이 없는 값은 기본값으로 메운다.
+ * 상태 계산에 쓰이는 필드가 늘어나면 그때는 저장 키의 버전을 올려야 한다.
+ */
+export function restoreItems(items: Item[]): Item[] {
+  return items.map((item) => ({
+    ...item,
+    source_ref: { ...item.source_ref, raw_line: item.source_ref.raw_line ?? '' },
+  }));
+}
+
+/**
  * 사람이 값을 고친 뒤 예외와 상태를 다시 계산한다.
  *
  * 값이 바뀌면 판정도 바뀐다. 비어 있던 적용일을 채우면 필수값 누락이 풀리고,

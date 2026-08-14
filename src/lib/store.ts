@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseEvidenceCsv, CsvParseError } from './parseCsv';
-import { addManualItem, buildItems, effectiveFlags, recomputeItems } from './pipeline';
+import { addManualItem, buildItems, effectiveFlags, recomputeItems, restoreItems } from './pipeline';
 import * as review from './review';
 import { SAMPLE_CSV, SAMPLE_FILE_NAME } from './sampleData';
 import type { CurrentFields, ExceptionFlag, Item, ReviewStatus } from './types';
@@ -78,7 +78,9 @@ function readBackup(): InboxData | null {
     const saved = JSON.parse(raw) as Persisted;
     if (!Array.isArray(saved.items) || saved.items.length === 0) return null;
     return {
-      items: saved.items,
+      // 나중에 추가한 필드는 예전 백업에 없다. 판정에 영향이 없는 값은 채워 넣어
+      // 검수하던 승인·메모를 살린다.
+      items: restoreItems(saved.items),
       fileName: saved.fileName ?? null,
       warnings: saved.warnings ?? [],
       filters: saved.filters ?? DEFAULT_FILTERS,

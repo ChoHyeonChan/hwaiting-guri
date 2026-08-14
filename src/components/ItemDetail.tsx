@@ -78,8 +78,9 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
           )}
         </p>
 
-        {/* 파일에 실제로 적혀 있던 한 줄. 관찰값은 공백을 다듬은 뒤라 원문과 다를 수 있다 */}
-        {item.source_ref.raw_line !== '' && (
+        {/* 파일에 실제로 적혀 있던 한 줄. 관찰값은 공백을 다듬은 뒤라 원문과 다를 수 있다.
+            수기 등록이면 빈 문자열이고, 이 필드가 없던 시절의 백업이면 undefined다 */}
+        {item.source_ref.raw_line && (
           <details className="mt-2">
             <summary className="cursor-pointer text-xs text-slate-500 hover:text-navy">
               원본 행 원문 보기

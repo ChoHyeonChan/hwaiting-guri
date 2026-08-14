@@ -13,7 +13,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseEvidenceCsv, type ParsedRow } from '../src/lib/parseCsv';
-import { addManualItem, buildItems, canApprove, recomputeItems } from '../src/lib/pipeline';
+import { addManualItem, buildItems, canApprove, recomputeItems, restoreItems } from '../src/lib/pipeline';
 import {
   approve as reviewApprove,
   editField as reviewEdit,
@@ -912,6 +912,28 @@ if (!rawKept) failures += 1;
 console.log('');
 console.log(`  각 항목이 원본 CSV 한 줄을 들고 있는가: ${rawKept ? 'PASS' : 'FAIL'}`);
 console.log(`    예) ${sampleItems[3].source_ref.raw_line}`);
+
+// 수기 등록은 파일의 행이 아니므로 원문이 비어야 한다.
+const manualRaw = addManualItem(NORMAL, [], 1)[0];
+const manualRawOk = check('manualRaw', JSON.stringify(manualRaw.source_ref.raw_line), '""');
+console.log(`  수기 등록 항목의 원문은 비어 있는가: ${manualRawOk ? 'PASS' : 'FAIL'}`);
+
+// raw_line은 나중에 추가한 필드다. 이 필드가 없던 백업을 복원해도 화면이 깨지면 안 된다.
+// 표시 전용이라 백업을 버리지 않고 빈 값으로 채운다.
+const legacyBackup = sampleItems.map((item) => {
+  const ref = { ...item.source_ref } as Partial<typeof item.source_ref>;
+  delete ref.raw_line;
+  return { ...item, source_ref: ref as typeof item.source_ref };
+});
+const healed = restoreItems(legacyBackup);
+const healOk = check(
+  'legacyHeal',
+  String(healed.every((i) => typeof i.source_ref.raw_line === 'string')),
+  'true',
+);
+console.log('');
+console.log(`  raw_line이 없던 예전 백업 복원: ${healOk ? '빈 값으로 채움 PASS' : 'FAIL'}`);
+console.log('    -> 표시 전용 필드 하나 때문에 검수하던 승인·메모를 날리지 않는다.');
 
 // ---------------------------------------------------------------- 결과
 console.log('');
