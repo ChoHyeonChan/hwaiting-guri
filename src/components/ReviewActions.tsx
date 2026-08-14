@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { approvalBlock } from '@/lib/pipeline';
 import type { Item } from '@/lib/types';
 
@@ -19,17 +20,45 @@ export function ReviewActions({
   const decided = item.review_status === 'approved' || item.review_status === 'rejected';
   const block = approvalBlock(item);
   const isDuplicate = item.duplicate_of !== null;
+  const approved = item.review_status === 'approved';
+
+  /**
+   * 승인을 누른 순간 아직 막혀 있었으면 사유를 눈에 띄게 한다.
+   *
+   * 항목을 옮기면 부모가 uid를 key로 새로 그리므로 이 표시는 따라오지 않는다.
+   */
+  const [nudged, setNudged] = useState(false);
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4">
       <h3 className="text-sm font-semibold text-navy">검수</h3>
 
       <div className="mt-2 flex flex-wrap gap-2">
+        {/*
+          승인이 막혀 있어도 disabled로 두지 않는다.
+
+          값을 고친 직후 곧바로 승인을 누르는 흐름이 실제로 가장 잦다. 입력란은
+          포커스가 빠질 때 값을 커밋하므로, 마우스를 누르는 순간 커밋이 일어나
+          승인 조건이 그제서야 충족된다. 이때 버튼이 disabled면 브라우저가 그 클릭을
+          버려서 "한 번 더 눌러야 하는" 동작이 된다. 눌리게 두고 조건은 여기서 본다.
+          승인 자체도 review.approve가 canApprove를 다시 검사하므로 이중으로 막힌다.
+        */}
         <button
           type="button"
-          onClick={() => onApprove(item.uid)}
-          disabled={block !== null || item.review_status === 'approved'}
-          className="rounded-md bg-navy px-3 py-1.5 text-sm font-medium text-white hover:bg-navy-mid disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+          onClick={() => {
+            if (approved) return;
+            if (block) {
+              setNudged(true);
+              return;
+            }
+            onApprove(item.uid);
+          }}
+          aria-disabled={block !== null || approved}
+          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+            block !== null || approved
+              ? 'cursor-not-allowed bg-slate-200 text-slate-400'
+              : 'bg-navy text-white hover:bg-navy-mid'
+          }`}
         >
           승인
         </button>
@@ -52,9 +81,15 @@ export function ReviewActions({
         )}
       </div>
 
-      {/* 승인이 막힌 이유를 버튼 아래에 그대로 적는다 */}
+      {/* 승인이 막힌 이유를 버튼 아래에 그대로 적는다. 승인을 눌렀다면 강조한다 */}
       {block && (
-        <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
+        <p
+          className={`mt-2 rounded-md border px-2.5 py-1.5 text-xs ${
+            nudged
+              ? 'border-amber-500 bg-amber-100 font-medium text-amber-950 ring-2 ring-amber-300'
+              : 'border-amber-300 bg-amber-50 text-amber-900'
+          }`}
+        >
           {block.detail}
         </p>
       )}

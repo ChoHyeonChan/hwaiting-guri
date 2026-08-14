@@ -264,7 +264,9 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
         </table>
       </div>
 
+      {/* 항목을 옮기면 승인 사유 강조 같은 일회성 표시가 따라오지 않도록 새로 그린다 */}
       <ReviewActions
+        key={item.uid}
         item={item}
         onApprove={actions.approve}
         onReject={actions.reject}
