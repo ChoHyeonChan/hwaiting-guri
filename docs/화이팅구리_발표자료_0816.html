@@ -264,7 +264,7 @@
     <div class="col card mid">
       <div class="punch" style="padding-top:0"><span class="big" style="color:var(--gold);font-size:26pt">2</span>
         <span class="cap" style="font-size:13pt;color:var(--navy)"><b>핵심 흐름과<br>차별화 화면</b></span></div>
-      <p class="small">담당자가 쓰는 순서 · 차별화 기능 세 가지</p>
+      <p class="small">담당자가 쓰는 순서 · 차별화 <b>네 가지</b></p>
     </div>
     <div class="col card mid">
       <div class="punch" style="padding-top:0"><span class="big" style="color:var(--gold);font-size:26pt">3</span>
@@ -277,28 +277,42 @@
       <p class="small">막힌 것, 해결한 것, 못 한 것</p>
     </div>
   </div>
-  <p class="small mute">발표 뒤에 <b>질의응답용 부록</b>이 이어집니다 — 명세 정정 사례 · 직접 눌러 보실 순서 · 검증 근거.</p>
+  <p class="small mute">발표 뒤에 <b>질의응답용 부록</b>이 이어집니다 — 직접 눌러 보실 순서 · 확인한 근거와 남긴 기록.</p>
 </section>
 
 <!-- 1. 팀의 차별점 -->
 <section class="slide" data-no="2">
-  <h2><span class="axis">1</span>팀의 차별점 — 합치지 않습니다</h2>
-  <div class="card gold" style="margin-bottom:7mm">
-    <p style="font-size:15pt;line-height:1.5">자동으로 반영하면 빠릅니다.<br>
-    그런데 <b>틀렸을 때 아무도 모릅니다.</b></p>
+  <h2><span class="axis">1</span>팀의 차별점 — 요구된 것 위에 무엇을 더했는가</h2>
+  <div class="card gold" style="margin-bottom:6mm">
+    <p style="font-size:13.5pt;line-height:1.5">필수 7개와 선택 1개는 <b>전부 충족</b>했습니다(3장).
+    이 장에는 <b>요구되지 않았는데 한 것</b>만 적습니다.</p>
+  </div>
+  <div class="row grow" style="margin-bottom:5mm">
+    <div class="col card mid">
+      <h3>① 만든 결과로 명세를 고쳤습니다</h3>
+      <p>실행 출력과 근거 조항을 붙여 문의했고,
+      창업팀이 <b>전체 팀에 정정 공지</b>를 냈습니다.</p>
+      <p class="small mute" style="margin-top:2.5mm">문서를 읽고 만드는 데서 멈추지 않았습니다</p>
+    </div>
+    <div class="col card mid">
+      <h3>② 계산을 대신합니다</h3>
+      <p>명세가 <b>“kg당 약 11% 실질 인상”</b>이라 적어 둔 그 계산을
+      담당자 대신 <b>화면이 합니다.</b></p>
+      <p class="small mute" style="margin-top:2.5mm">자동 적용은 하지 않습니다 · 5장</p>
+    </div>
   </div>
   <div class="row grow">
     <div class="col card mid">
-      <h3>숫자 뒤를 봅니다</h3>
-      <p>단가가 그대로여도<br><b>양이 줄었으면 오른 것</b></p>
+      <h3>③ 감점 없는 것을 했습니다</h3>
+      <p>재업로드 누적 인입. 창업팀 회신 원문이
+      <b>“구현하지 않았다고 감점하지 않습니다”</b>입니다.</p>
+      <p class="small mute" style="margin-top:2.5mm">6장</p>
     </div>
     <div class="col card mid">
-      <h3>어디서 왔든 같은 검사</h3>
-      <p>파일 · 수기 · PDF 공문<br><b>한 파이프라인</b></p>
-    </div>
-    <div class="col card mid">
-      <h3>근거 없이 승인 불가</h3>
-      <p>메모를 적어야 승인<br><b>고치면 승인이 풀림</b></p>
+      <h3>④ 선택 요건을 했습니다</h3>
+      <p>공문 <b>PDF에서 표를 읽습니다.</b>
+      샘플 4종 품목 <b>14 / 14</b>, 누락 0 · 오탐 0.</p>
+      <p class="small mute" style="margin-top:2.5mm">7장</p>
     </div>
   </div>
 </section>
@@ -356,10 +370,15 @@
 
 <!-- 2-2. 차별화 화면 ① -->
 <section class="slide invert" data-no="4">
-  <h2>차별화 ① 숫자만 보면 놓칩니다</h2>
-  <div class="row" style="margin-bottom:6mm">
-    <div class="col card mid">
-      <h3>DOC-019 · 냉동 돼지고기</h3>
+  <h2>차별화 ① 명세가 적어 둔 계산을 화면이 합니다</h2>
+  <div class="card gold" style="margin-bottom:6mm">
+    <p style="font-size:11.5pt;line-height:1.5"><span class="mute">창업팀 규칙 명세 4-3</span><br>
+    “단가는 86,000원 → 86,000원으로 그대로인데 규격이 10kg → 9kg으로 줄었습니다.
+    <b>kg당 단가로는 약 11% 실질 인상입니다.</b>”</p>
+  </div>
+  <div class="row grow" style="margin-bottom:5mm">
+    <div class="col card mid" style="flex:1.5">
+      <h3>계산할 수 있으면 계산합니다</h3>
       <table>
         <tbody>
           <tr><td>상자</td><td class="num">10kg → <b>9kg</b></td></tr>
@@ -367,43 +386,31 @@
           <tr><td>kg당</td><td class="num">8,600 → <b class="warn">9,556</b></td></tr>
         </tbody>
       </table>
-      <div class="punch">
-        <span class="big">+11.1%</span>
-        <span class="cap">단가는 그대로<br>실제로는 인상</span>
-      </div>
+      <p class="small mute" style="margin-top:3mm">담당자가 계산기를 두드리지 않습니다</p>
     </div>
-    <div class="col card mid">
-      <h3>DOC-020 · 고수</h3>
-      <table>
-        <tbody>
-          <tr><td>규격</td><td class="num">1kg → <b>4단</b></td></tr>
-          <tr><td>단위</td><td class="num">kg과 단이 섞임</td></tr>
-          <tr><td>단가</td><td class="num">28,000 → 22,000</td></tr>
-        </tbody>
-      </table>
-      <div class="punch">
-        <span class="big">?</span>
-        <span class="cap">1단이 몇 kg인지<br>모르면 비교 불가</span>
-      </div>
-    </div>
-    <div class="col" style="flex:1.45;display:flex;flex-direction:column;justify-content:center">
-      <img class="shot" src="shots/slide-diff1-doc019.png"
-           alt="DOC-019가 보류 필요로 잡히고 규격 10kg→9kg 근거가 표시된 실제 화면">
+    <div class="col" style="display:flex;flex-direction:column;justify-content:center">
+      <img class="shot" src="shots/slide-diff1-realunit.png"
+           alt="DOC-019 상세에 kg당 8,600에서 9,556으로 +11.1% 실질 인상이 표시된 실제 화면">
       <div class="shot-cap">배포본 화면 · DOC-019</div>
     </div>
   </div>
   <div class="card gold">
-    <p>둘 다 <b>자동으로 넘기지 않고 대기</b>로 보냅니다. 왜 걸렸는지 원본 값을 함께 보여줍니다.
-    <span class="mute">kg당 환산은 저희가 하지 않습니다 — 1단이 몇 kg인지가 공급사마다 달라, 대신 확인을 요청합니다.</span></p>
+    <p><b>계산할 수 없으면 숫자를 만들지 않습니다.</b> DOC-020은 기준이 <code>kg</code>에서 <code>단</code>으로 바뀌어,
+    1단이 몇 kg인지는 공급사만 압니다. 화면은 그 사실을 적고 확인을 요청합니다.
+    <span class="mute">산출값이며 예외 판정과 승인 조건을 바꾸지 않습니다. 자동 환산·자동 승인은 하지 않습니다.</span></p>
   </div>
 </section>
 
 <!-- 2-3. 차별화 화면 ② -->
 <section class="slide" data-no="5">
-  <h2>차별화 ② 같은 공문이 두 번 와도</h2>
-  <p class="lead" style="margin-top:0;margin-bottom:7mm">
+  <h2>차별화 ② 같은 공문이 두 번 와도 <span class="tag">채점 대상 아님</span></h2>
+  <p class="lead" style="margin-top:0;margin-bottom:5mm">
     재발송 공문은 흔합니다. <b>두 번 반영되면 그만큼 더 나갑니다.</b>
   </p>
+  <div class="card tint" style="margin-bottom:5mm">
+    <p class="small"><span class="mute">창업팀 회신 원문</span> “재업로드 시나리오는 채점 정답표에 없으며,
+    위 동작을 <b>구현하지 않았다고 감점하지 않습니다.</b>” <span class="mute">→ 그래서 구현했습니다.</span></p>
+  </div>
   <div class="row grow" style="margin-bottom:6mm">
     <div class="col card mid">
       <h3>덮어쓰지 않고 쌓습니다</h3>
@@ -458,8 +465,56 @@ DOC-010 <span class="y">← 가온푸드 공문 3행</span></pre>
   </div>
 </section>
 
+<!-- 2-5. 차별화 ④ — 만든 결과로 명세를 고쳤다 -->
+<section class="slide invert" data-no="7">
+  <h2>차별화 ④ 만든 결과로 명세를 고쳤습니다</h2>
+  <div class="row" style="margin-bottom:6mm">
+    <div class="col card mid">
+      <h3>1. 실행 결과에서 어긋남을 발견</h3>
+      <p class="small">한 항목의 예외 개수가 <b>명세의 요약표와 규칙 설명에서 서로 달랐습니다.</b>
+      저희 화면은 규칙 쪽을 따르고 있었습니다.</p>
+    </div>
+    <div class="col card mid">
+      <h3>2. 근거와 함께 문의</h3>
+      <p class="small">추측으로 묻지 않고 <b>실제 실행 결과와 해당 조항</b>을 함께 붙여
+      “이 둘이 어긋납니다”라고 문의했습니다.</p>
+    </div>
+    <div class="col card gold mid">
+      <h3>3. 전체 팀 공지로 정정</h3>
+      <p class="small">창업팀이 명세를 고치고 <b>모든 참가팀에 공지</b>했습니다.
+      저희 화면은 이미 맞아서 <b>고칠 코드가 없었습니다.</b></p>
+    </div>
+  </div>
+  <div class="row" style="margin-bottom:6mm">
+    <div class="col card mid">
+      <h3>무엇이 어긋났는가 — DOC-020</h3>
+      <table>
+        <tbody>
+          <tr><td>§4-1 규격 패턴</td><td>규격 불일치</td></tr>
+          <tr><td>§4-2 단위 병기</td><td>단위 불일치</td></tr>
+          <tr><td>§6-1 지침</td><td class="num">“두 개 이상이면 <b>모두 표시</b>”</td></tr>
+          <tr><td>§6-2 기대 결과표</td><td class="warn">단위 불일치 <b>한 가지만</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col card mid">
+      <h3>저희 실행 출력</h3>
+      <pre>DOC-016 -> missing_required
+DOC-018 -> duplicate_suspected
+DOC-019 -> spec_mismatch
+DOC-020 -> spec_mismatch, unit_mismatch <span class="y">← 2개</span></pre>
+      <p class="small mute" style="margin-top:3mm">네 건 중 세 건은 기대 결과와 같았고, DOC-020만 달랐습니다.</p>
+    </div>
+  </div>
+  <div class="card" style="border-left:4px solid var(--gold)">
+    <p style="font-size:12.5pt"><span class="mute">창업팀 정정 공지 중</span>
+      <b>“한 참가팀이 실제 구현 출력과 근거 조항을 함께 보내주셔서 확인됐습니다.”</b>
+      <span class="mute">이 문의로 전체 참가팀의 판정 기준이 바뀌었습니다.</span></p>
+  </div>
+</section>
+
 <!-- 3. 요건 구현 결과 (1페이지) -->
-<section class="slide" data-no="7">
+<section class="slide" data-no="8">
   <h2><span class="axis">3</span>요건 구현 결과</h2>
   <div class="row grow" style="margin-bottom:6mm">
     <div class="col" style="flex:1.3">
@@ -492,14 +547,14 @@ DOC-010 <span class="y">← 가온푸드 공문 3행</span></pre>
   </div>
   <div class="kpis">
     <div class="kpi"><div class="v">20 / 20</div><div class="k">제공 데이터 판정 일치</div></div>
-    <div class="kpi"><div class="v">12</div><div class="k">자체 점검 · 전부 통과</div></div>
+    <div class="kpi"><div class="v">13</div><div class="k">자체 점검 · 전부 통과</div></div>
     <div class="kpi"><div class="v">7 + 1</div><div class="k">필수 + 추가 요건</div></div>
     <div class="kpi"><div class="v">0</div><div class="k">밖으로 나간 데이터</div></div>
   </div>
 </section>
 
 <!-- 4. 목표와 자체 평가 (1페이지) -->
-<section class="slide invert" data-no="8">
+<section class="slide invert" data-no="9">
   <h2><span class="axis">4</span>목표와 자체 평가</h2>
   <div class="row grow" style="margin-bottom:6mm">
     <div class="col card mid">
@@ -529,35 +584,8 @@ DOC-010 <span class="y">← 가온푸드 공문 3행</span></pre>
 </section>
 
 <!-- 부록 A -->
-<section class="slide" data-no="9">
-  <h2>부록 A · 창업팀 명세를 고치게 한 문의</h2>
-  <div class="row" style="margin-bottom:5mm">
-    <div class="col card mid">
-      <h3>1. 실행 결과에서 어긋남을 발견</h3>
-      <p class="small">한 항목의 예외 개수가 <b>명세의 요약표와 규칙 설명에서 서로 달랐습니다.</b>
-      저희 화면은 규칙 쪽을 따르고 있었습니다.</p>
-    </div>
-    <div class="col card mid">
-      <h3>2. 근거와 함께 문의</h3>
-      <p class="small">추측으로 묻지 않고 <b>실제 실행 결과와 해당 조항</b>을 함께 붙여
-      "이 둘이 어긋납니다"라고 문의했습니다.</p>
-    </div>
-    <div class="col card gold mid">
-      <h3>3. 전체 팀 공지로 정정</h3>
-      <p class="small">창업팀이 명세를 고치고 <b>모든 참가팀에 공지</b>했습니다.
-      저희 화면은 이미 맞아서 <b>고칠 코드가 없었습니다.</b></p>
-    </div>
-  </div>
-  <div class="card" style="border-left:4px solid var(--gold)">
-    <p style="font-size:12pt"><span class="mute">창업팀 공지 중</span><br>
-      <b>"한 참가팀이 실제 구현 출력과 근거 조항을 함께 보내주셔서 확인됐습니다."</b></p>
-  </div>
-  <p class="small mute">문서를 읽고 만드는 데서 멈추지 않고, <b>만든 결과로 문서를 검증</b>했습니다.</p>
-</section>
-
-<!-- 부록 B -->
 <section class="slide" data-no="10">
-  <h2>부록 B · 직접 눌러 보실 순서</h2>
+  <h2>부록 A · 직접 눌러 보실 순서</h2>
   <p class="lead" style="margin-top:0;margin-bottom:4mm">
     <b>로그인이 없습니다.</b> 주소만 열면 바로 쓸 수 있고, 파일이 없어도 예시 데이터로 확인하실 수 있습니다.
   </p>
@@ -576,16 +604,18 @@ DOC-010 <span class="y">← 가온푸드 공문 3행</span></pre>
   </table>
 </section>
 
-<!-- 부록 C -->
+<!-- 부록 B -->
 <section class="slide" data-no="11">
-  <h2>부록 C · 확인한 근거와 남긴 기록</h2>
+  <h2>부록 B · 확인한 근거와 남긴 기록</h2>
   <div class="row" style="margin-bottom:5mm">
     <div class="col card mid">
       <h3>스스로 점검하는 장치</h3>
-      <p class="small">기대하는 결과를 미리 적어 두고 <b>실제 실행 결과와 맞춰 보는 점검</b>을 12항목 만들었습니다.
+      <p class="small">기대하는 결과를 미리 적어 두고 <b>실제 실행 결과와 맞춰 보는 점검</b>을 13항목 만들었습니다.
       하나라도 어긋나면 실패로 끝납니다.</p>
       <p class="small" style="margin-top:3mm">실행 결과 전문을 <b>손대지 않고 그대로</b> 문서로 남겼습니다
-      (<span class="mute">검증결과_전체_2026-08-14.pdf</span>).</p>
+      (<span class="mute">검증결과_전체_2026-08-15.pdf</span>).</p>
+      <p class="small" style="margin-top:3mm"><b>받은 적 없는 데이터로도 시험했습니다.</b>
+      직접 만든 24건(소수점·음수·날짜 3종·이모지·BOM 없는 파일)에서 <b>죽지 않고 전부 확인 필요로</b> 떨어졌습니다.</p>
     </div>
     <div class="col card mid">
       <h3>개발 중 스스로 찾아 고친 것</h3>
