@@ -210,8 +210,8 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
               </p>
               <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
                 <span className="font-mono text-sm text-slate-700">
-                  {realUnit.unit}당 {won(String(Math.round(realUnit.pricePerUnitBefore)))} →{' '}
-                  <b className="text-navy">{won(String(Math.round(realUnit.pricePerUnitAfter)))}</b>
+                  {realUnit.unit}당 {perUnit(realUnit.pricePerUnitBefore)} →{' '}
+                  <b className="text-navy">{perUnit(realUnit.pricePerUnitAfter)}</b>
                 </span>
                 <span
                   className={
@@ -221,7 +221,7 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
                   }
                 >
                   {realUnit.changeRate > 0 ? '+' : ''}
-                  {realUnit.changeRate.toFixed(1)}%
+                  {rate(realUnit.changeRate)}%
                 </span>
               </div>
               <p className="mt-2 text-xs text-slate-500">
@@ -389,6 +389,20 @@ function Box({ label, value, tone = 'slate' }: { label: string; value: string; t
 function won(value: string): string {
   const n = Number((value ?? '').replace(/,/g, '').trim());
   return Number.isFinite(n) && value.trim() !== '' ? n.toLocaleString('ko-KR') : value;
+}
+
+/**
+ * 단위당 단가. 반올림해서 0이 되는 값을 "0"으로 보여주면 공짜로 읽힌다.
+ * 100원 미만이면 소수 둘째자리까지 살린다(999999kg -> 1kg 같은 입력에서 실제로 나온다).
+ */
+function perUnit(value: number): string {
+  const digits = Math.abs(value) < 100 ? 2 : 0;
+  return value.toLocaleString('ko-KR', { minimumFractionDigits: 0, maximumFractionDigits: digits });
+}
+
+/** 변화율. 자릿수가 커도 읽히게 천단위를 끊는다. */
+function rate(value: number): string {
+  return value.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 /** 요건 3: "필드 누락은 데이터 부족으로 표시". 빈칸으로 두지 않는다. */

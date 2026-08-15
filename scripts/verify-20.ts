@@ -1207,6 +1207,25 @@ async function main() {
     console.log(`  ${pad(`${oldSpec} -> ${newSpec}`, 16)} ${label} ${expected ? '환산' : '거절'}  ${ok ? 'PASS' : 'FAIL'}`);
   }
 
+  // 규격 문자열 자체가 이상할 때. 죽지 말고 거절하거나 계산해야 한다.
+  console.log('');
+  const specCases: [string, string, boolean, string][] = [
+    ['999999kg', '1kg', true, '아주 큰 수량도 계산한다'],
+    ['2.5kg', '2.25kg', true, '소수점 수량'],
+    ['1,000g', '900g', true, '콤마가 들어간 수량'],
+    ['1g', '900mg', true, 'g과 mg'],
+    ['10kg', '대용량', false, '변경값에 숫자가 없다'],
+    ['', '9kg', false, '기존값이 비어 있다'],
+    ['-10kg', '9kg', false, '음수 수량'],
+    ['10kg', '', false, '변경값이 비어 있다'],
+  ];
+  for (const [oldSpec, newSpec, expected, label] of specCases) {
+    const r = computeRealUnitPrice({ ...doc019, spec_change: { old: oldSpec, new: newSpec } });
+    const got = r !== null && r.comparable;
+    const ok = check(`spec:${oldSpec}->${newSpec}`, String(got), String(expected));
+    console.log(`  ${pad(`${oldSpec || '(빈값)'} -> ${newSpec || '(빈값)'}`, 22)} ${pad(label, 22)} ${expected ? '계산' : '거절'}  ${ok ? 'PASS' : 'FAIL'}`);
+  }
+
   // ★ 채점 표면 확인. 심사위원은 파일 없이 들어와 "예시 데이터로 바로 보기"를 누른다.
   //   그 10건에서 계산값이 실제로 보여야 이 기능이 채점 대상 화면에 나타난다.
   //   기능이 되는 것과 채점자가 그것을 보는 것은 다른 문제다.
