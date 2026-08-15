@@ -15,6 +15,7 @@ import { resolve } from 'node:path';
 import { parseEvidenceCsv, type ParsedRow } from '../src/lib/parseCsv';
 import { addManualItem, addPdfItems, buildItems, canApprove, recomputeItems, restoreItems } from '../src/lib/pipeline';
 import { sourceBadge } from '../src/lib/labels';
+import { computeRealUnitPrice } from '../src/lib/realUnitPrice';
 import {
   approve as reviewApprove,
   editField as reviewEdit,
@@ -1104,6 +1105,91 @@ async function main() {
     console.log(`  깨진 PDF를 넣으면 이유를 알려주는가: ${brokenOk ? 'PASS' : 'FAIL'}`);
     console.log(`    "${broken.problems[0]?.slice(0, 60)}"`);
   }
+
+  // ------------------------------------------------ 13. 규격이 줄었을 때의 실질 단가
+  console.log('');
+  console.log('='.repeat(72));
+  console.log('13. 규격이 줄었을 때의 실질 단가 (명세 4-3 "kg당 약 11% 실질 인상")');
+  console.log('='.repeat(72));
+
+  const doc019 = items.find((i) => i.doc_id === 'DOC-019')!;
+  const doc020 = items.find((i) => i.doc_id === 'DOC-020')!;
+  const doc001 = items.find((i) => i.doc_id === 'DOC-001')!;
+
+  // 예외 4종과 상태가 이 계산 때문에 흔들리지 않아야 한다.
+  const flagsBefore = items.map((i) => `${i.doc_id}:${sorted(i.exception_flags)}:${i.review_status}`).join('|');
+  for (const item of items) computeRealUnitPrice(item);
+  const flagsAfter = items.map((i) => `${i.doc_id}:${sorted(i.exception_flags)}:${i.review_status}`).join('|');
+  const noSideEffect = check('realUnitPure', flagsAfter, flagsBefore);
+  console.log(`  20건 전체에 계산을 돌려도 예외 플래그·상태가 그대로인가: ${noSideEffect ? 'PASS' : 'FAIL'}`);
+  console.log('    -> 산출값이라 판정을 바꾸지 않는다. 다섯 번째 플래그를 만들지 않는다.');
+
+  const r19 = computeRealUnitPrice(doc019);
+  console.log('');
+  if (r19 && r19.comparable) {
+    const per = `${Math.round(r19.pricePerUnitBefore)} -> ${Math.round(r19.pricePerUnitAfter)}`;
+    const rate = `${r19.changeRate > 0 ? '+' : ''}${r19.changeRate.toFixed(1)}%`;
+    const ok19 = check('doc019Unit', r19.unit, 'kg');
+    const okPer = check('doc019Per', per, '8600 -> 9556');
+    const okRate = check('doc019Rate', rate, '+11.1%');
+    console.log(`  DOC-019 (10kg -> 9kg, 단가 86,000 -> 86,000)`);
+    console.log(`    환산 단위 ${r19.unit}  ${ok19 ? 'PASS' : 'FAIL'}`);
+    console.log(`    ${r19.unit}당 ${per}  ${okPer ? 'PASS' : 'FAIL'}`);
+    console.log(`    실질 변화율 ${rate}  ${okRate ? 'PASS' : 'FAIL'}`);
+    console.log('    -> 창업팀 명세 4-3의 "약 11% 실질 인상"과 같은 값이다.');
+  } else {
+    failures += 1;
+    console.log('  DOC-019 실질 단가: FAIL (환산되어야 하는데 안 됐다)');
+  }
+
+  const r20 = computeRealUnitPrice(doc020);
+  console.log('');
+  const ok20 = check('doc020', String(r20 !== null && !r20.comparable), 'true');
+  console.log(`  DOC-020 (1kg -> 4단) 숫자를 만들지 않고 거절하는가: ${ok20 ? 'PASS' : 'FAIL'}`);
+  if (r20 && !r20.comparable) {
+    const hasGuide = check('doc020Guide', String(r20.reason.includes('공급사')), 'true');
+    console.log(`    "${r20.reason}"`);
+    console.log(`    공급사에 확인하라고 안내하는가: ${hasGuide ? 'PASS' : 'FAIL'}`);
+  }
+
+  console.log('');
+  const okNone = check('doc001', String(computeRealUnitPrice(doc001)), 'null');
+  console.log(`  규격 변경이 없는 DOC-001은 카드를 만들지 않는가: ${okNone ? 'PASS' : 'FAIL'}`);
+
+  // 단가를 못 읽으면 계산하지 않는다. 형식 검증 결과를 게이트로 쓴다.
+  const brokenPrice = {
+    ...doc019,
+    current: { ...doc019.current, price_after: '86.000' },
+    format_errors: [
+      { field: 'price_after' as const, value: '86.000', reason: '정수로 읽을 수 없습니다' },
+    ],
+  };
+  const rBroken = computeRealUnitPrice(brokenPrice);
+  const okBroken = check('brokenPrice', String(rBroken !== null && !rBroken.comparable), 'true');
+  console.log(`  단가를 정수로 못 읽으면 환산을 멈추는가: ${okBroken ? 'PASS' : 'FAIL'}`);
+  if (rBroken && !rBroken.comparable) console.log(`    "${rBroken.reason}"`);
+
+  // 수량이 0이면 나누지 않는다.
+  const zeroQty = { ...doc019, spec_change: { old: '0kg', new: '9kg' } };
+  const rZero = computeRealUnitPrice(zeroQty);
+  const okZero = check('zeroQty', String(rZero !== null && !rZero.comparable), 'true');
+  console.log(`  규격 수량이 0이면 나누지 않는가: ${okZero ? 'PASS' : 'FAIL'}`);
+
+  // 복합 규격은 환산 기준을 자동으로 정하지 않는다.
+  const compound = { ...doc019, spec_change: { old: '2kg×6PK', new: '2kg×5PK' } };
+  const rCompound = computeRealUnitPrice(compound);
+  const okCompound = check('compound', String(rCompound !== null && !rCompound.comparable), 'true');
+  console.log(`  여러 단위가 묶인 규격을 거절하는가: ${okCompound ? 'PASS' : 'FAIL'}`);
+
+  // 규격이 늘어난 경우는 인하로 나와야 한다.
+  const bigger = { ...doc019, spec_change: { old: '9kg', new: '10kg' } };
+  const rBigger = computeRealUnitPrice(bigger);
+  const okBigger = check(
+    'bigger',
+    String(rBigger !== null && rBigger.comparable && rBigger.changeRate < 0),
+    'true',
+  );
+  console.log(`  규격이 늘면 인하(음수)로 나오는가: ${okBigger ? 'PASS' : 'FAIL'}`);
 
   // ---------------------------------------------------------------- 결과
   console.log('');

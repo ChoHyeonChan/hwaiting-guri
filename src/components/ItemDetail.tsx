@@ -6,6 +6,7 @@ import {
   NORMALIZATION_SOURCE_LABEL, STATUS_LABEL, STATUS_STYLE, flagEvidence,
 } from '@/lib/labels';
 import { INSUFFICIENT_LABEL } from '@/lib/normalize';
+import { computeRealUnitPrice } from '@/lib/realUnitPrice';
 import { ReviewActions } from './ReviewActions';
 import { ChangeLogPanel } from './ChangeLogPanel';
 import type { CurrentFields, Item, ItemFields } from '@/lib/types';
@@ -48,6 +49,7 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
 
   const flags = effectiveFlags(item);
   const block = approvalBlock(item);
+  const realUnit = computeRealUnitPrice(item);
 
   return (
     <section className="space-y-3">
@@ -179,6 +181,63 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
               );
             })}
           </ul>
+        </div>
+      )}
+
+      {/* 규격이 줄었을 때의 실질 단가.
+          창업팀 규칙 명세 4-3이 kg당으로 환산해 "약 11% 실질 인상"이라고 설명한 계산을
+          담당자가 머리로 하지 않게 대신 해 준다. 산출값이고 판정이 아니다. */}
+      {realUnit && (
+        <div
+          className={
+            realUnit.comparable
+              ? 'rounded-lg border border-gold bg-gold-soft p-4'
+              : 'rounded-lg border border-slate-200 bg-white p-4'
+          }
+        >
+          <h3 className="text-sm font-semibold text-navy">실질 단가</h3>
+          {realUnit.comparable ? (
+            <>
+              <p className="mt-0.5 text-xs text-slate-600">
+                단가는{' '}
+                <span className="font-mono">{won(item.current.price_before)}</span> →{' '}
+                <span className="font-mono">{won(item.current.price_after)}</span>
+                인데 규격이{' '}
+                <span className="font-mono">
+                  {realUnit.quantityBefore}
+                  {realUnit.unit}
+                </span>{' '}
+                →{' '}
+                <span className="font-mono">
+                  {realUnit.quantityAfter}
+                  {realUnit.unit}
+                </span>
+                으로 바뀌었습니다.
+              </p>
+              <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                <span className="font-mono text-sm text-slate-700">
+                  {realUnit.unit}당 {won(String(Math.round(realUnit.pricePerUnitBefore)))} →{' '}
+                  <b className="text-navy">{won(String(Math.round(realUnit.pricePerUnitAfter)))}</b>
+                </span>
+                <span
+                  className={
+                    realUnit.changeRate > 0
+                      ? 'text-xl font-bold text-amber-700'
+                      : 'text-xl font-bold text-emerald-700'
+                  }
+                >
+                  {realUnit.changeRate > 0 ? '+' : ''}
+                  {realUnit.changeRate.toFixed(1)}%
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                산출값입니다. 이 값이 예외 판정이나 승인 조건을 바꾸지 않으며, 승인 여부는 사람이
+                정합니다.
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-slate-700">{realUnit.reason}</p>
+          )}
         </div>
       )}
 
@@ -330,6 +389,12 @@ function Box({ label, value, tone = 'slate' }: { label: string; value: string; t
       <div className="font-mono text-sm">{value}</div>
     </div>
   );
+}
+
+/** 천단위 콤마를 붙인다. 숫자로 못 읽으면 원문을 그대로 보여준다. */
+function won(value: string): string {
+  const n = Number((value ?? '').replace(/,/g, '').trim());
+  return Number.isFinite(n) && value.trim() !== '' ? n.toLocaleString('ko-KR') : value;
 }
 
 /** 요건 3: "필드 누락은 데이터 부족으로 표시". 빈칸으로 두지 않는다. */
