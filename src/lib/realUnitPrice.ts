@@ -60,7 +60,9 @@ export function computeRealUnitPrice(item: Item): RealUnitPrice | null {
     };
   }
 
-  if (before.unit !== after.unit) {
+  // 같은 물리량이면 표기가 달라도 비교할 수 있다. kg과 g은 기준이 바뀐 게 아니다.
+  const factor = conversionFactor(after.unit, before.unit);
+  if (factor === null) {
     return {
       comparable: false,
       reason:
@@ -68,6 +70,9 @@ export function computeRealUnitPrice(item: Item): RealUnitPrice | null {
         `1${after.unit}이 몇 ${before.unit}인지는 공급사에 확인해야 합니다.`,
     };
   }
+  // 변경 수량을 기존 단위로 옮긴다. 900g -> 0.9kg
+  after.quantity *= factor;
+  after.unit = before.unit;
 
   // 단가 형식 검증은 validateFormats가 이미 했다. 같은 규칙을 다시 쓰지 않고 결과를 게이트로 쓴다.
   const priceBroken = item.format_errors.some(
@@ -115,6 +120,37 @@ export function computeRealUnitPrice(item: Item): RealUnitPrice | null {
     pricePerUnitAfter: perAfter,
     changeRate: (perAfter / perBefore - 1) * 100,
   };
+}
+
+/**
+ * 같은 물리량 안에서의 크기. 기준 단위 1개가 몇인지로 적는다.
+ *
+ * 공급사가 "1kg -> 900g"으로 통보하는 경우가 실제로 있다. 이건 기준이 바뀐 게
+ * 아니라 표기만 다른 것이므로 환산해서 비교해야 한다. 반대로 "1kg -> 4단"은
+ * 여기에 없는 단위가 섞이므로 환산하지 않는다. 1단이 몇 kg인지는 공급사만 안다.
+ */
+const UNIT_SCALE: Record<string, { dimension: string; scale: number }> = {
+  mg: { dimension: 'mass', scale: 0.001 },
+  g: { dimension: 'mass', scale: 1 },
+  kg: { dimension: 'mass', scale: 1000 },
+  ml: { dimension: 'volume', scale: 1 },
+  cc: { dimension: 'volume', scale: 1 },
+  l: { dimension: 'volume', scale: 1000 },
+  ℓ: { dimension: 'volume', scale: 1000 },
+};
+
+/**
+ * `from` 1개가 `to` 몇 개인지. 같은 단위면 1, 환산할 수 없으면 null.
+ * 대소문자는 무시한다(L과 l, KG와 kg).
+ */
+function conversionFactor(from: string, to: string): number | null {
+  if (from === to) return 1;
+
+  const a = UNIT_SCALE[from.toLowerCase()];
+  const b = UNIT_SCALE[to.toLowerCase()];
+  if (!a || !b || a.dimension !== b.dimension) return null;
+
+  return a.scale / b.scale;
 }
 
 interface Quantity {

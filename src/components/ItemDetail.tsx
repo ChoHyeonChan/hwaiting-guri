@@ -203,15 +203,9 @@ export function ItemDetail({ item, onSelect, actions }: Props) {
                 <span className="font-mono">{won(item.current.price_before)}</span> →{' '}
                 <span className="font-mono">{won(item.current.price_after)}</span>
                 인데 규격이{' '}
-                <span className="font-mono">
-                  {realUnit.quantityBefore}
-                  {realUnit.unit}
-                </span>{' '}
-                →{' '}
-                <span className="font-mono">
-                  {realUnit.quantityAfter}
-                  {realUnit.unit}
-                </span>
+                {/* 문장은 공문에 적힌 표기를 그대로 쓴다. 900g을 0.9kg으로 바꿔 적으면 원문을 잃는다 */}
+                <span className="font-mono">{item.spec_change?.old}</span> →{' '}
+                <span className="font-mono">{item.spec_change?.new}</span>
                 으로 바뀌었습니다.
               </p>
               <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
