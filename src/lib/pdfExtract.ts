@@ -76,19 +76,48 @@ function normalizeHeader(text: string): string {
  * PDF를 쓰지 않는 사람에게까지 무거운 파일을 내려받게 할 이유가 없고,
  * 서버 렌더 시점에는 브라우저 API가 없어 정적 생성이 깨진다.
  */
+/**
+ * 한 쪽의 글자 조각을 읽는다. `page.getTextContent()`를 쓰지 않는다.
+ *
+ * pdf.js의 그 편의 메서드는 내부에서 `for await (const v of readableStream)`을 돈다.
+ * **ReadableStream의 비동기 순회는 Safari(WebKit)에 없다.** 그래서 사파리에서만
+ * "undefined is not a function"으로 끝나고, 크롬·파이어폭스에서는 멀쩡하다.
+ * 교차 브라우저로 재보고 스택을 떠서 찾았다(getTextContent 안에서 던진다).
+ *
+ * 스트림을 리더로 직접 읽으면 세 엔진에서 모두 돈다. 결과는 같다.
+ */
+type PdfTextItem = { str: string; transform: number[]; width: number };
+/** 표·목록 같은 구조 표시. str이 없어서 걸러낸다 */
+type PdfMarkedContent = { type: string; id: string | null };
+type PdfItem = PdfTextItem | PdfMarkedContent;
+
+async function readTextItems(page: {
+  streamTextContent: (params?: object) => ReadableStream<{ items: PdfItem[] }>;
+}): Promise<PdfItem[]> {
+  const reader = page.streamTextContent().getReader();
+  const items: PdfItem[] = [];
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value?.items) items.push(...value.items);
+  }
+  return items;
+}
+
 async function readPieces(file: File): Promise<{ pages: Piece[][]; pageCount: number }> {
-  // 브라우저에서는 기본 빌드를, Node에서는 legacy 빌드를 써야 한다.
-  // 자체 테스트가 같은 코드를 Node에서 돌리는데, 기본 빌드는 그곳에서
-  // 경고만 남기고 문서를 열지 못한다.
+  // 브라우저와 Node가 같은 legacy 빌드를 쓴다.
+  //
+  // 기본 빌드는 Node에서 경고만 남기고 문서를 열지 못한다. 자체 테스트가 이 코드를
+  // 그대로 돌리므로 Node에서도 되는 빌드가 필요하다. legacy는 pdf.js가 구형 엔진용으로
+  // 함께 배포하는 것이라 브라우저에서도 문제없이 돌고(세 엔진에서 확인), 경로가 하나면
+  // "브라우저에서만 되는 버그"가 생길 자리도 줄어든다.
   const inBrowser = typeof window !== 'undefined';
-  const pdfjs = inBrowser
-    ? await import('pdfjs-dist')
-    : await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
   if (inBrowser) {
     // 워커 파일을 번들러가 찾을 수 있는 형태로 지정한다(pdf.js 권장 방식).
     pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-      'pdfjs-dist/build/pdf.worker.mjs',
+      'pdfjs-dist/legacy/build/pdf.worker.mjs',
       import.meta.url,
     ).toString();
   }
@@ -99,10 +128,10 @@ async function readPieces(file: File): Promise<{ pages: Piece[][]; pageCount: nu
 
   for (let p = 1; p <= doc.numPages; p += 1) {
     const page = await doc.getPage(p);
-    const content = await page.getTextContent();
+    const items = await readTextItems(page);
     const pieces: Piece[] = [];
 
-    for (const item of content.items) {
+    for (const item of items) {
       if (!('str' in item)) continue;
       // 폭이 0인 빈 조각만 버린다. 공백 조각은 칸을 가르는 데 필요하다.
       if (item.str === '') continue;
