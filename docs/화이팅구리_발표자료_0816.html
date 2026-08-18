@@ -218,6 +218,15 @@
     border-radius: 50%;
   }
 
+  /* 폰으로 바로 접속하는 QR. 표지는 작게, 마무리는 질의응답 내내 떠 있으니 크게 */
+  .qr-card {
+    position: absolute; right: 24mm; bottom: 24mm;
+    background: #fff; border-radius: 3mm; padding: 4mm 4mm 3mm;
+    text-align: center; box-shadow: 0 2mm 8mm rgba(0,0,0,.28);
+  }
+  .qr-card img { display: block; margin: 0 auto; }
+  .qr-card .qr-cap { font-size: 9pt; color: var(--navy); margin-top: 2mm; font-weight: 700; }
+
   /* 배포본에서 찍은 실제 화면. 말이 아니라 화면으로 보이라는 템플릿 요구 */
   .shot {
     display: block; width: 100%; height: auto;
@@ -255,6 +264,10 @@
     팀 화이팅구리 (1인팀) · 조현찬<br>
     https://hwaiting-guri.vercel.app &nbsp;·&nbsp; 로그인 없이 바로 사용<br>
     2026-08-16
+  </div>
+  <div class="qr-card">
+    <img src="shots/qr-site.png" style="width:30mm" alt="배포 주소 QR">
+    <div class="qr-cap">폰으로 바로 열립니다</div>
   </div>
 </section>
 
@@ -604,6 +617,10 @@ DOC-020 -> spec_mismatch, unit_mismatch <span class="y">← 2개</span></pre>
     <span style="font-size:14pt;color:#fff">https://hwaiting-guri.vercel.app</span><br>
     ComfoziAI 구매 증빙 인박스 · 팀 화이팅구리 (1인팀) · 조현찬<br>
     이어서 <b style="color:var(--gold)">질의응답용 부록</b> — 직접 눌러 보실 순서 · 확인한 근거와 남긴 기록
+  </div>
+  <div class="qr-card">
+    <img src="shots/qr-site.png" style="width:42mm" alt="배포 주소 QR">
+    <div class="qr-cap">지금 찍으면 바로 열립니다</div>
   </div>
 </section>
 
