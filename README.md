@@ -13,7 +13,9 @@
 
 ## 구동 URL
 
-🔗 **https://hwaiting-guri.vercel.app/**
+🔗 ~~https://hwaiting-guri.vercel.app/~~ — **2026-08-20 파이널데이 종료 후 운영진 지시로 배포를 내렸다.**
+지금은 위 주소가 열리지 않는다. 확인하려면 아래 "실행 방법"대로 로컬에서 띄우거나,
+"배포 절차"대로 Vercel에 다시 올리면 같은 화면이 나온다. 아래 설명은 배포 당시 기준이다.
 
 **로그인이 없다.** 주소만 열면 전 기능을 쓸 수 있고, 파일이 없어도
 `예시 데이터로 바로 보기`로 예외 4종과 내보내기까지 확인할 수 있다.
@@ -157,7 +159,8 @@ GET /_next/static/immutable/media/pdf.worker.28jxijx3_bnpc.mjs
 
 ### 배포 절차
 
-Vercel에 올려 두었다. 🔗 https://hwaiting-guri.vercel.app/
+대회 기간(2026-08-07 ~ 08-20) 동안 Vercel에 올려 두었다(https://hwaiting-guri.vercel.app).
+**파이널데이 종료 후 운영진 지시로 프로젝트를 삭제했다.** 다시 올리는 절차는 아래와 같다.
 
 1. Vercel에서 이 저장소를 임포트한다. 프레임워크는 Next.js로 자동 인식된다.
 2. 빌드 설정을 바꾸지 않는다(`npm run build`, 출력 `.next`). 환경변수 입력란은 비워 둔다.
